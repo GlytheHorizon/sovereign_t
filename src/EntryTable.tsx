@@ -1,6 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { EntrySummary, invoke } from './api';
-import { Star, Trash2, Copy, RefreshCcw, Shield, Plus, Edit2, Eye, EyeOff } from 'lucide-react';
+import { Star, Trash2, Copy, RefreshCcw, Shield, Plus, Edit2 } from 'lucide-react';
 
 interface EntryTableProps {
   entries: EntrySummary[];
@@ -11,6 +11,7 @@ interface EntryTableProps {
   onDelete: (id: string) => void;
   onAddClick: () => void;
   onEditClick: (id: string) => void;
+  showAllPasswords: boolean;
 }
 
 const EntryTable: React.FC<EntryTableProps> = ({
@@ -22,29 +23,22 @@ const EntryTable: React.FC<EntryTableProps> = ({
   onDelete,
   onAddClick,
   onEditClick,
+  showAllPasswords,
 }) => {
-  const [viewingPasswordId, setViewingPasswordId] = useState<string | null>(null);
-  const [viewedPassword, setViewedPassword] = useState<string>('');
-  const holdPasswordIdRef = useRef<string | null>(null);
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, string>>({});
 
   const handleCopyPassword = async (entryId: string) => {
     try {
-      await invoke('copy_entry_secret', {
-        input: { entry_id: entryId, field: 'password', ttl_seconds: 15 },
-      });
-    } catch (e) {
+      const secrets = await invoke<{password: string, notes: string}>('get_entry_secrets', { entry_id: entryId });
       try {
-        const secrets = await invoke<{password: string, notes: string}>('get_entry_secrets', { entry_id: entryId });
-        try {
-          await invoke('copy_to_clipboard', {
-            input: { text: secrets.password, ttl_seconds: 15 },
-          });
-        } catch {
-          try { await navigator.clipboard.writeText(secrets.password); } catch {}
-        }
-      } catch (inner) {
-        console.error('copy failed', inner);
+        await navigator.clipboard.writeText(secrets.password);
+      } catch {
+        await invoke('copy_to_clipboard', {
+          input: { text: secrets.password, ttl_seconds: 15 },
+        });
       }
+    } catch (e) {
+      console.error('copy failed', e);
     }
   };
 
@@ -58,29 +52,45 @@ const EntryTable: React.FC<EntryTableProps> = ({
     }
   };
 
-  const startViewingPassword = async (entryId: string) => {
-    holdPasswordIdRef.current = entryId;
-    setViewingPasswordId(entryId);
-    setViewedPassword('');
-    try {
-      const secrets = await invoke<{password: string, notes: string}>('get_entry_secrets', { entry_id: entryId });
-      if (holdPasswordIdRef.current !== entryId) {
-        return;
-      }
-      setViewedPassword(secrets.password);
-    } catch (e) {
-      console.error(e);
-      if (holdPasswordIdRef.current === entryId) {
-        setViewedPassword('');
-      }
-    }
-  };
+  useEffect(() => {
+    let active = true;
 
-  const stopViewingPassword = () => {
-    holdPasswordIdRef.current = null;
-    setViewingPasswordId(null);
-    setViewedPassword('');
-  };
+    if (!showAllPasswords) {
+      setVisiblePasswords({});
+      return undefined;
+    }
+
+    const loadAll = async () => {
+      const pairs = await Promise.all(
+        entries.map(async (entry) => {
+          const match = entry.username.match(/^\$\$(google|apple|facebook|crypto)\$\$(.*)$/);
+          const customType = match ? match[1] : null;
+          const isSocial = customType && customType !== 'crypto';
+          if (isSocial) {
+            return [entry.entry_id, ''] as const;
+          }
+          try {
+            const secrets = await invoke<{password: string, notes: string}>('get_entry_secrets', { entry_id: entry.entry_id });
+            return [entry.entry_id, secrets.password] as const;
+          } catch {
+            return [entry.entry_id, ''] as const;
+          }
+        }),
+      );
+
+      if (!active) return;
+      const next: Record<string, string> = {};
+      for (const [id, value] of pairs) {
+        next[id] = value;
+      }
+      setVisiblePasswords(next);
+    };
+
+    loadAll();
+    return () => {
+      active = false;
+    };
+  }, [entries, showAllPasswords]);
 
   const getInitial = (title: string) => {
     return title.charAt(0).toUpperCase();
@@ -181,19 +191,11 @@ const EntryTable: React.FC<EntryTableProps> = ({
                   </span>
                 ) : (
                   <div className="entry-password-cell" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                     <span style={{ fontFamily: viewingPasswordId === entry.entry_id ? 'monospace' : 'inherit' }}>
-                       {viewingPasswordId === entry.entry_id && viewedPassword ? viewedPassword : '••••••••••••'}
+                     <span style={{ fontFamily: showAllPasswords ? 'monospace' : 'inherit' }}>
+                       {showAllPasswords && visiblePasswords[entry.entry_id]
+                         ? visiblePasswords[entry.entry_id]
+                         : '••••••••••••'}
                      </span>
-                     <button 
-                       className="action-btn" style={{ padding: 2, background: 'transparent' }}
-                       onPointerDown={() => startViewingPassword(entry.entry_id)}
-                       onPointerUp={stopViewingPassword}
-                       onPointerLeave={stopViewingPassword}
-                       onPointerCancel={stopViewingPassword}
-                       title="Hold to view"
-                     >
-                        {viewingPasswordId === entry.entry_id ? <EyeOff size={14} /> : <Eye size={14} />}
-                     </button>
                   </div>
                 )}
               </td>

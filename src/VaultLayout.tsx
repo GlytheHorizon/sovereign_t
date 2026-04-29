@@ -3,7 +3,7 @@ import Sidebar, { Section } from './Sidebar';
 import EntryTable from './EntryTable';
 import AddEntryModal from './AddEntryModal';
 import { invoke, EntrySummary, GroupSummary } from './api';
-import { Search, Plus, CheckCircle2, XCircle } from 'lucide-react';
+import { Search, Plus, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
 
 interface VaultLayoutProps {
   onLocked: () => void;
@@ -22,6 +22,7 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
   const [editEntryId, setEditEntryId] = useState<string | undefined>(undefined);
   
   const [search, setSearch] = useState('');
+  const [showAllPasswords, setShowAllPasswords] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -180,6 +181,14 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
               <Plus size={16} /> Add Account
             </button>
           )}
+
+          <button
+            className="btn btn-ghost"
+            onClick={() => setShowAllPasswords((prev) => !prev)}
+            title={showAllPasswords ? 'Hide all passwords' : 'Show all passwords'}
+          >
+            {showAllPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
         </div>
 
         <div className="group-filter-bar">
@@ -222,6 +231,7 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
             onDelete={handleDelete}
             onAddClick={openAddModal}
             onEditClick={openEditModal}
+            showAllPasswords={showAllPasswords}
           />
         </div>
       </div>

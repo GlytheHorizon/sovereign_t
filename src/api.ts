@@ -1,3 +1,5 @@
+import { invoke as tauriInvoke } from '@tauri-apps/api/core';
+
 export interface EntrySummary {
   entry_id: string;
   title: string;
@@ -45,9 +47,12 @@ export interface UpdateEntryInput {
   trashed: boolean;
 }
 
-// Ensure Tauri invoke exists to differentiate between real and fallback environment
-const tauriInvokeFn = (window as any).__TAURI__?.core?.invoke || (window as any).__TAURI__?.invoke;
-const isTauri = typeof tauriInvokeFn === 'function';
+// Detect Tauri even when the global helper is not exposed.
+const isTauri = typeof window !== 'undefined' && !!(
+  (window as any).__TAURI__?.core?.invoke ||
+  (window as any).__TAURI_INTERNALS__ ||
+  (window as any).__TAURI_IPC__
+);
 
 // Fallback Mock Data
 let mockDb: EntrySummary[] = [];
@@ -58,7 +63,7 @@ const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 export async function invoke<T>(cmd: string, args: Record<string, any> = {}): Promise<T> {
   if (isTauri) {
-    return tauriInvokeFn(cmd, args);
+    return tauriInvoke(cmd, args);
   } else {
     // --- MOCK BROWSER IMPLEMENTATION FOR FAST DEVELOPMENT ---
     console.log(`[API Mock] Invoking '${cmd}'`, args);
