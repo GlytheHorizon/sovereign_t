@@ -54,7 +54,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ editEntryId, entries, onC
         }
 
         // Fetch securely
-        invoke<{password: string, notes: string}>('get_entry_secrets', { entry_id: editEntryId })
+        invoke<{password: string, notes: string}>('get_entry_secrets', { entryId: editEntryId })
           .then(res => {
              if (!match || match[1] === 'crypto') {
                  setPassword(res.password);

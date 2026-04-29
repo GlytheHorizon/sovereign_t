@@ -29,7 +29,7 @@ const EntryTable: React.FC<EntryTableProps> = ({
 
   const handleCopyPassword = async (entryId: string) => {
     try {
-      const secrets = await invoke<{password: string, notes: string}>('get_entry_secrets', { entry_id: entryId });
+      const secrets = await invoke<{password: string, notes: string}>('get_entry_secrets', { entryId: entryId });
       try {
         await navigator.clipboard.writeText(secrets.password);
       } catch {
@@ -70,7 +70,7 @@ const EntryTable: React.FC<EntryTableProps> = ({
             return [entry.entry_id, ''] as const;
           }
           try {
-            const secrets = await invoke<{password: string, notes: string}>('get_entry_secrets', { entry_id: entry.entry_id });
+            const secrets = await invoke<{password: string, notes: string}>('get_entry_secrets', { entryId: entry.entry_id });
             return [entry.entry_id, secrets.password] as const;
           } catch {
             return [entry.entry_id, ''] as const;

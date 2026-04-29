@@ -84,7 +84,7 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
 
   const handleToggleFavorite = async (id: string, current: boolean) => {
     try {
-      await invoke('set_favorite', { entry_id: id, favorite: !current });
+      await invoke('set_favorite', { entryId: id, favorite: !current });
       fetchAll();
     } catch {
       showToast('Failed to update favorite.', 'error');
@@ -93,7 +93,7 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
 
   const handleTrash = async (id: string) => {
     try {
-      await invoke('move_to_trash', { entry_id: id });
+      await invoke('move_to_trash', { entryId: id });
       showToast('Moved to trash.');
       fetchAll();
     } catch {
@@ -103,7 +103,7 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
 
   const handleRestore = async (id: string) => {
     try {
-      await invoke('restore_from_trash', { entry_id: id });
+      await invoke('restore_from_trash', { entryId: id });
       showToast('Restored from trash.');
       fetchAll();
     } catch {
@@ -113,7 +113,7 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
 
   const handleDelete = async (id: string) => {
     try {
-      await invoke('delete_entry', { entry_id: id });
+      await invoke('delete_entry', { entryId: id });
       showToast('Permanently deleted.');
       fetchAll();
     } catch {

@@ -142,25 +142,25 @@ export async function invoke<T>(cmd: string, args: Record<string, any> = {}): Pr
       }
 
       case 'set_favorite': {
-        const entry = mockDb.find((e) => e.entry_id === args.entry_id);
+        const entry = mockDb.find((e) => e.entry_id === (args.entryId || args.entry_id));
         if (entry) entry.favorite = args.favorite;
         return undefined as any;
       }
 
       case 'move_to_trash': {
-        const e1 = mockDb.find((e) => e.entry_id === args.entry_id);
+        const e1 = mockDb.find((e) => e.entry_id === (args.entryId || args.entry_id));
         if (e1) e1.trashed = true;
         return undefined as any;
       }
 
       case 'restore_from_trash': {
-        const e2 = mockDb.find((e) => e.entry_id === args.entry_id);
+        const e2 = mockDb.find((e) => e.entry_id === (args.entryId || args.entry_id));
         if (e2) e2.trashed = false;
         return undefined as any;
       }
 
       case 'delete_entry': {
-        mockDb = mockDb.filter((e) => e.entry_id !== args.entry_id);
+        mockDb = mockDb.filter((e) => e.entry_id !== (args.entryId || args.entry_id));
         return undefined as any;
       }
 
