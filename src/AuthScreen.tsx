@@ -12,6 +12,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
 
   const checkVault = async () => {
@@ -50,10 +51,19 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
       }
       setPassword('');
       setConfirmPassword('');
-      onUnlocked();
+      
+      let p = 0;
+      const interval = setInterval(() => {
+        p += 5;
+        setProgress(p);
+        if (p >= 100) {
+          clearInterval(interval);
+          setLoading(false);
+          onUnlocked();
+        }
+      }, 50);
     } catch (e: any) {
       setError(e?.message || 'Authentication failed.');
-    } finally {
       setLoading(false);
     }
   };
@@ -91,7 +101,16 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
             </div>
           )}
 
-          <div className="form-group">
+          {progress > 0 && progress < 100 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, textAlign: 'center' }}>Decrypting Vault... {progress}%</div>
+              <div style={{ height: 4, background: 'var(--bg-tertiary)', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ width: `${progress}%`, height: '100%', background: 'var(--accent)', transition: 'width 0.05s linear' }} />
+              </div>
+            </div>
+          )}
+
+          <div className="form-group" style={{ opacity: progress > 0 ? 0.5 : 1, pointerEvents: progress > 0 ? 'none' : 'auto' }}>
             <label className="form-label">
               {mode === 'create' ? 'Create Master Password' : 'Master Password'}
             </label>

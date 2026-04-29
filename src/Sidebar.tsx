@@ -1,7 +1,7 @@
 import React from 'react';
-import { Folder, Star, Trash2, Lock, Shield } from 'lucide-react';
+import { Folder, Star, Trash2, Lock, Shield, Network } from 'lucide-react';
 
-export type Section = 'all' | 'favorites' | 'trash';
+export type Section = 'all' | 'favorites' | 'tree' | 'trash';
 
 interface SidebarProps {
   section: Section;
@@ -12,6 +12,7 @@ interface SidebarProps {
 
 const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'all', label: 'All Items', icon: <Folder size={18} /> },
+  { id: 'tree', label: 'Folder Tree', icon: <Network size={18} /> },
   { id: 'favorites', label: 'Favorites', icon: <Star size={18} /> },
   { id: 'trash', label: 'Trash', icon: <Trash2 size={18} /> },
 ];
@@ -43,7 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({ section, onSectionChange, counts, onL
           >
             <span className="sidebar-link-icon">{item.icon}</span>
             {item.label}
-            <span className="sidebar-link-count">{counts[item.id]}</span>
+            {item.id !== 'tree' && <span className="sidebar-link-count">{counts[item.id as 'all' | 'favorites' | 'trash']}</span>}
           </button>
         ))}
       </nav>

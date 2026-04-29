@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { invoke, NewEntryInput, UpdateEntryInput, EntrySummary, GroupSummary } from './api';
 import { Plus, Edit3, X, AlertTriangle, Eye, EyeOff, Dices, Save } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 
 interface AddEntryModalProps {
   editEntryId?: string;
@@ -19,11 +20,9 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ editEntryId, entries, onC
   const [notes, setNotes] = useState('');
   const [favorite, setFavorite] = useState(false);
   const [groups, setGroups] = useState<GroupSummary[]>([]);
-  const [newGroupName, setNewGroupName] = useState('');
-  const [newGroupColor, setNewGroupColor] = useState('#2f80ed');
-  const [creatingGroup, setCreatingGroup] = useState(false);
-  
+
   const [showPassword, setShowPassword] = useState(false);
+  const [confirmShowPassword, setConfirmShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!editEntryId);
   const [error, setError] = useState('');
@@ -95,27 +94,6 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ editEntryId, entries, onC
       setShowPassword(true);
     } catch (e) {
       console.error('generate failed', e);
-    }
-  };
-
-  const handleCreateGroup = async () => {
-    const name = newGroupName.trim();
-    if (!name) {
-      setError('Group name is required.');
-      return;
-    }
-    setCreatingGroup(true);
-    try {
-      const created = await invoke<GroupSummary>('create_group', {
-        input: { name, color: newGroupColor },
-      });
-      setGroups((prev) => [...prev, created]);
-      setGroupId(created.group_id);
-      setNewGroupName('');
-    } catch (e: any) {
-      setError(e?.message || 'Failed to create group.');
-    } finally {
-      setCreatingGroup(false);
     }
   };
 
@@ -238,30 +216,6 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ editEntryId, entries, onC
                 </option>
               ))}
             </select>
-
-            <div className="group-create-row">
-              <input
-                className="form-input"
-                placeholder="New group name"
-                value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
-              />
-              <input
-                className="group-color-input"
-                type="color"
-                value={newGroupColor}
-                onChange={(e) => setNewGroupColor(e.target.value)}
-                aria-label="Group color"
-              />
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={handleCreateGroup}
-                disabled={creatingGroup}
-              >
-                {creatingGroup ? <span className="spinner" /> : 'Create'}
-              </button>
-            </div>
           </div>
 
           {/* Login Method */}
@@ -289,18 +243,6 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ editEntryId, entries, onC
               placeholder={loginMethod === 'crypto' ? 'e.g. Wallet Name / Email' : 'e.g. user@gmail.com'}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-            />
-          </div>
-
-          {/* URL */}
-          <div className="form-group">
-            <label className="form-label">URL (Optional)</label>
-            <input
-              id="entry-url"
-              className="form-input"
-              placeholder="https://..."
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
             />
           </div>
 
@@ -336,7 +278,13 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ editEntryId, entries, onC
                      <button
                        type="button"
                        className="form-input-btn"
-                       onClick={() => setShowPassword(!showPassword)}
+                       onClick={() => {
+                         if (!showPassword) {
+                           setConfirmShowPassword(true);
+                         } else {
+                           setShowPassword(false);
+                         }
+                       }}
                        title={showPassword ? 'Hide password' : 'Show password'}
                      >
                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -389,6 +337,18 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ editEntryId, entries, onC
             </div>
           )}
 
+          {/* URL */}
+          <div className="form-group">
+            <label className="form-label">URL (Optional)</label>
+            <input
+              id="entry-url"
+              className="form-input"
+              placeholder="https://..."
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
+          </div>
+
           {/* Notes */}
           <div className="form-group">
             <label className="form-label">Notes</label>
@@ -418,6 +378,20 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ editEntryId, entries, onC
           </button>
         </div>
       </div>
+      
+      {confirmShowPassword && (
+        <ConfirmModal
+          title="Show Password"
+          message="This will expose your credentials on screen. Are you sure you are in a safe, private area?"
+          confirmText="Yes, Show Password"
+          danger={true}
+          onConfirm={() => {
+            setShowPassword(true);
+            setConfirmShowPassword(false);
+          }}
+          onCancel={() => setConfirmShowPassword(false)}
+        />
+      )}
     </div>
   );
 };

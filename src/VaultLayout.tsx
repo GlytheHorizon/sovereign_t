@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar, { Section } from './Sidebar';
 import EntryTable from './EntryTable';
+import FolderTree from './FolderTree';
 import AddEntryModal from './AddEntryModal';
 import { invoke, EntrySummary, GroupSummary } from './api';
 import { Search, Plus, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
+import InfoModal from './InfoModal';
 
 interface VaultLayoutProps {
   onLocked: () => void;
@@ -24,6 +27,13 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
   const [search, setSearch] = useState('');
   const [showAllPasswords, setShowAllPasswords] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  // Modals state
+  const [infoEntry, setInfoEntry] = useState<EntrySummary | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    type: 'trash' | 'delete' | 'restore' | 'lock' | 'showAllPasswords' | 'deleteGroup';
+    id?: string;
+  } | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
@@ -92,6 +102,10 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
   };
 
   const handleTrash = async (id: string) => {
+    setConfirmAction({ type: 'trash', id });
+  };
+  
+  const executeTrash = async (id: string) => {
     try {
       await invoke('move_to_trash', { entryId: id });
       showToast('Moved to trash.');
@@ -102,6 +116,10 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
   };
 
   const handleRestore = async (id: string) => {
+    setConfirmAction({ type: 'restore', id });
+  };
+  
+  const executeRestore = async (id: string) => {
     try {
       await invoke('restore_from_trash', { entryId: id });
       showToast('Restored from trash.');
@@ -112,6 +130,10 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
   };
 
   const handleDelete = async (id: string) => {
+    setConfirmAction({ type: 'delete', id });
+  };
+  
+  const executeDelete = async (id: string) => {
     try {
       await invoke('delete_entry', { entryId: id });
       showToast('Permanently deleted.');
@@ -121,7 +143,35 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
     }
   };
 
+  const handleDeleteGroup = async (id: string) => {
+    setConfirmAction({ type: 'deleteGroup', id });
+  };
+
+  const executeDeleteGroup = async (id: string) => {
+    try {
+      await invoke('delete_group', { groupId: id, group_id: id });
+      showToast('Group deleted.');
+      fetchAll();
+    } catch (e: any) {
+      showToast(`Failed to delete group: ${e}`, 'error');
+    }
+  };
+
+  const handleCreateGroup = async (name: string, color: string) => {
+    try {
+      await invoke('create_group', { input: { name, color } });
+      showToast(`Group "${name}" created.`);
+      fetchAll();
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to create group.', 'error');
+    }
+  };
+
   const handleLock = async () => {
+    setConfirmAction({ type: 'lock' });
+  };
+  
+  const executeLock = async () => {
     try {
       await invoke('lock_vault');
     } catch {}
@@ -138,8 +188,14 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
     setShowModal(true);
   };
 
+  const openInfoModal = (id: string) => {
+    const entry = entries.find(e => e.entry_id === id);
+    if (entry) setInfoEntry(entry);
+  };
+
   const sectionLabels: Record<Section, string> = {
     all: 'All Items',
+    tree: 'Folder Tree',
     favorites: 'Favorites',
     trash: 'Trash',
   };
@@ -184,7 +240,13 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
 
           <button
             className="btn btn-ghost"
-            onClick={() => setShowAllPasswords((prev) => !prev)}
+            onClick={() => {
+              if (!showAllPasswords) {
+                setConfirmAction({ type: 'showAllPasswords' });
+              } else {
+                setShowAllPasswords(false);
+              }
+            }}
             title={showAllPasswords ? 'Hide all passwords' : 'Show all passwords'}
           >
             {showAllPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -222,17 +284,30 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
         </div>
 
         <div className="entry-list-container">
-          <EntryTable
-            entries={entries}
-            section={section}
-            onToggleFavorite={handleToggleFavorite}
-            onTrash={handleTrash}
-            onRestore={handleRestore}
-            onDelete={handleDelete}
-            onAddClick={openAddModal}
-            onEditClick={openEditModal}
-            showAllPasswords={showAllPasswords}
-          />
+          {section === 'tree' ? (
+            <FolderTree
+              entries={entries}
+              groups={groups}
+              onEditClick={openEditModal}
+              onInfoClick={openInfoModal}
+              onDeleteGroup={handleDeleteGroup}
+              onCreateGroup={handleCreateGroup}
+            />
+          ) : (
+            <EntryTable
+              entries={entries}
+              section={section}
+              onToggleFavorite={handleToggleFavorite}
+              onTrash={handleTrash}
+              onRestore={handleRestore}
+              onDelete={handleDelete}
+              onAddClick={openAddModal}
+              onEditClick={openEditModal}
+              onInfoClick={openInfoModal}
+              showAllPasswords={showAllPasswords}
+              groups={groups}
+            />
+          )}
         </div>
       </div>
 
@@ -242,6 +317,50 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
            entries={allEntries}
            onClose={() => setShowModal(false)} 
            onSaved={handleSaved} 
+        />
+      )}
+
+      {infoEntry && (
+        <InfoModal entry={infoEntry} onClose={() => setInfoEntry(null)} />
+      )}
+
+      {confirmAction && (
+        <ConfirmModal
+          title={
+            confirmAction.type === 'delete' ? 'Delete Permanently' :
+            confirmAction.type === 'deleteGroup' ? 'Delete Group' :
+            confirmAction.type === 'trash' ? 'Move to Trash' :
+            confirmAction.type === 'restore' ? 'Recover Account' :
+            confirmAction.type === 'showAllPasswords' ? 'Show All Passwords' :
+            'Lock Vault'
+          }
+          message={
+            confirmAction.type === 'delete' ? 'It will permanently delete the account and cannot be recovered.' :
+            confirmAction.type === 'deleteGroup' ? 'Are you sure you want to delete this group? All accounts inside will be moved to Uncategorized.' :
+            confirmAction.type === 'trash' ? 'Do you really want to delete the account?' :
+            confirmAction.type === 'restore' ? 'It will recover the account.' :
+            confirmAction.type === 'showAllPasswords' ? 'This will expose your credentials. Are you safe to use in a public area to avoid getting hacked?' :
+            'You will logout and the vault will be locked.'
+          }
+          confirmText={
+            confirmAction.type === 'delete' ? 'Delete Permanently' :
+            confirmAction.type === 'deleteGroup' ? 'Delete Group' :
+            confirmAction.type === 'trash' ? 'Move to Trash' :
+            confirmAction.type === 'restore' ? 'Recover' :
+            confirmAction.type === 'showAllPasswords' ? 'Yes, Show Passwords' :
+            'Lock Vault'
+          }
+          danger={['delete', 'deleteGroup', 'trash', 'showAllPasswords', 'lock'].includes(confirmAction.type)}
+          onConfirm={() => {
+            if (confirmAction.type === 'delete') executeDelete(confirmAction.id!);
+            if (confirmAction.type === 'deleteGroup') executeDeleteGroup(confirmAction.id!);
+            if (confirmAction.type === 'trash') executeTrash(confirmAction.id!);
+            if (confirmAction.type === 'restore') executeRestore(confirmAction.id!);
+            if (confirmAction.type === 'lock') executeLock();
+            if (confirmAction.type === 'showAllPasswords') setShowAllPasswords(true);
+            setConfirmAction(null);
+          }}
+          onCancel={() => setConfirmAction(null)}
         />
       )}
 

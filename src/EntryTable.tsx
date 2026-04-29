@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { EntrySummary, invoke } from './api';
-import { Star, Trash2, Copy, RefreshCcw, Shield, Plus, Edit2 } from 'lucide-react';
+import { EntrySummary, GroupSummary, invoke } from './api';
+import { Star, Trash2, Copy, RefreshCcw, Shield, Plus, Edit2, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface EntryTableProps {
   entries: EntrySummary[];
@@ -11,7 +11,9 @@ interface EntryTableProps {
   onDelete: (id: string) => void;
   onAddClick: () => void;
   onEditClick: (id: string) => void;
+  onInfoClick: (id: string) => void;
   showAllPasswords: boolean;
+  groups: GroupSummary[];
 }
 
 const EntryTable: React.FC<EntryTableProps> = ({
@@ -23,9 +25,17 @@ const EntryTable: React.FC<EntryTableProps> = ({
   onDelete,
   onAddClick,
   onEditClick,
+  onInfoClick,
   showAllPasswords,
+  groups,
 }) => {
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, string>>({});
+  const ITEMS_PER_PAGE = 8;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [entries, section]);
 
   const handleCopyPassword = async (entryId: string) => {
     try {
@@ -125,7 +135,11 @@ const EntryTable: React.FC<EntryTableProps> = ({
     );
   }
 
+  const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
+  const paginatedEntries = entries.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
   return (
+    <>
     <table className="entry-table">
       <thead>
         <tr>
@@ -133,15 +147,19 @@ const EntryTable: React.FC<EntryTableProps> = ({
           <th>Title</th>
           <th>Email / Username</th>
           <th>Password / Phrase</th>
-          <th>URL</th>
           <th style={{ width: 140 }}>Actions</th>
         </tr>
       </thead>
       <tbody>
-        {entries.map((entry) => {
+        {paginatedEntries.map((entry) => {
           const match = entry.username.match(/^\$\$(google|apple|facebook|crypto)\$\$(.*)$/);
           const customType = match ? match[1] : null;
           const displayUsername = match ? match[2] : entry.username;
+          
+          const group = groups.find(g => g.group_id === entry.group_id);
+          const badgeStyle = group 
+              ? { background: group.color, color: '#000', borderColor: group.color } 
+              : {};
 
           let customLabel = '';
           if (customType === 'google') customLabel = 'Google Login';
@@ -166,7 +184,7 @@ const EntryTable: React.FC<EntryTableProps> = ({
 
               <td>
                 <div className="entry-title-cell">
-                  <div className="entry-favicon">{getInitial(entry.title)}</div>
+                  <div className="entry-favicon" style={badgeStyle}>{getInitial(entry.title)}</div>
                   <span className="entry-title-text">{entry.title}</span>
                   {customType === 'crypto' && (
                      <span style={{ fontSize: 10, background: 'var(--success)', color: '#000', padding: '2px 6px', borderRadius: 4, marginLeft: 8, fontWeight: 'bold' }}>CRYPTO</span>
@@ -200,16 +218,6 @@ const EntryTable: React.FC<EntryTableProps> = ({
                 )}
               </td>
 
-              <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {entry.url ? (
-                  <span style={{ color: 'var(--accent)', fontSize: 12 }}>
-                    {entry.url.replace(/^https?:\/\//, '')}
-                  </span>
-                ) : (
-                  <span style={{ color: 'var(--text-muted)' }}>—</span>
-                )}
-              </td>
-
               <td>
                 <div className="entry-actions" style={{ opacity: 1 }}>
                   {!isSocial && (
@@ -223,6 +231,9 @@ const EntryTable: React.FC<EntryTableProps> = ({
                   )}
                   {section === 'trash' ? (
                     <>
+                      <button className="action-btn" onClick={() => onInfoClick(entry.entry_id)} title="Account Information">
+                        <Info size={14} />
+                      </button>
                       <button className="action-btn" onClick={() => onRestore(entry.entry_id)} title="Restore">
                         <RefreshCcw size={14} />
                       </button>
@@ -232,6 +243,9 @@ const EntryTable: React.FC<EntryTableProps> = ({
                     </>
                   ) : (
                     <>
+                      <button className="action-btn" onClick={() => onInfoClick(entry.entry_id)} title="Account Information">
+                        <Info size={14} />
+                      </button>
                       <button className="action-btn" onClick={() => onEditClick(entry.entry_id)} title="Edit Account">
                         <Edit2 size={14} />
                       </button>
@@ -247,6 +261,29 @@ const EntryTable: React.FC<EntryTableProps> = ({
         })}
       </tbody>
     </table>
+    
+    {totalPages > 1 && (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '24px 0 8px' }}>
+        <button
+          className="btn btn-ghost"
+          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+          disabled={currentPage === 1}
+        >
+          <ChevronLeft size={16} /> Previous
+        </button>
+        <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500 }}>
+          Page {currentPage} of {totalPages}
+        </span>
+        <button
+          className="btn btn-ghost"
+          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+          disabled={currentPage === totalPages}
+        >
+          Next <ChevronRight size={16} />
+        </button>
+      </div>
+    )}
+    </>
   );
 };
 
