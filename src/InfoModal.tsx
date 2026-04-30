@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, Clock, FileText, Link, Shield, User, Key, Eye, EyeOff } from 'lucide-react';
 import { invoke, EntrySummary } from './api';
+import ConfirmModal from './ConfirmModal';
 
 interface InfoModalProps {
   entry: EntrySummary;
@@ -11,6 +12,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ entry, onClose }) => {
   const [notes, setNotes] = useState<string>('Loading notes...');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState(false);
+  const [confirmShowPassword, setConfirmShowPassword] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -93,7 +95,10 @@ const InfoModal: React.FC<InfoModalProps> = ({ entry, onClose }) => {
                 <Key size={14} /> Password / Secret
               </div>
               <button 
-                onClick={() => setShowPassword(!showPassword)}
+                onClick={() => {
+                  if (!showPassword) setConfirmShowPassword(true);
+                  else setShowPassword(false);
+                }}
                 style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}
               >
                 {showPassword ? <><EyeOff size={14} /> Hide</> : <><Eye size={14} /> Show</>}
@@ -135,6 +140,19 @@ const InfoModal: React.FC<InfoModalProps> = ({ entry, onClose }) => {
           </button>
         </div>
       </div>
+      {confirmShowPassword && (
+        <ConfirmModal
+          title="Expose Secret?"
+          message="This will show your sensitive password/seed on the screen. Please ensure you are in a private area."
+          confirmText="Show Secret"
+          danger={true}
+          onConfirm={() => {
+            setShowPassword(true);
+            setConfirmShowPassword(false);
+          }}
+          onCancel={() => setConfirmShowPassword(false)}
+        />
+      )}
     </div>
   );
 };

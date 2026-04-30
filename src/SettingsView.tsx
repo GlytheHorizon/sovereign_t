@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Key, Info, User, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
+import { Shield, Key, Info, User, CheckCircle2, XCircle, Eye, EyeOff, Cpu, Code, Zap } from 'lucide-react';
 import { invoke } from './api';
 
 interface SettingsViewProps {
@@ -155,6 +155,29 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast }) => {
               <div className="about-content">
                 <span className="about-label">Build</span>
                 <span className="about-value">Build 0430260123PMS</span>
+              </div>
+            </div>
+          </div>
+          
+          <h2 className="settings-title" style={{ marginTop: 32 }}>
+            <Cpu size={20} /> Technology & Features
+          </h2>
+          <div className="about-card">
+            <div className="about-item">
+              <Code size={18} className="about-icon" />
+              <div className="about-content">
+                <span className="about-label">Core Tech Stack</span>
+                <span className="about-value">React, Vite, Tauri, SQLite, Rust</span>
+              </div>
+            </div>
+            <div className="about-item">
+              <Zap size={18} className="about-icon" />
+              <div className="about-content">
+                <span className="about-label">Special Features</span>
+                <span className="about-value" style={{ lineHeight: 1.4 }}>
+                  AES-256-GCM Encryption, Mini Vault,<br/>
+                  Glassmorphism UI, Zero-Knowledge Architecture
+                </span>
               </div>
             </div>
           </div>

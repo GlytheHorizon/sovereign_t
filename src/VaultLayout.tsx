@@ -8,6 +8,7 @@ import { Search, Plus, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import InfoModal from './InfoModal';
 import SettingsView from './SettingsView';
+import MiniVaultView from './MiniVaultView';
 
 interface VaultLayoutProps {
   onLocked: () => void;
@@ -200,6 +201,7 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
     favorites: 'Favorites',
     trash: 'Trash',
     settings: 'Settings',
+    mini_vault: 'Mini Vault',
   };
 
   return (
@@ -216,31 +218,31 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
       />
 
       <div className="main-content">
-        <div className="toolbar">
-          <h1 className="toolbar-title">{sectionLabels[section]}</h1>
-          <span className="toolbar-spacer" />
+        {section !== 'settings' && section !== 'mini_vault' && (
+          <div className="toolbar">
+            <h1 className="toolbar-title">{sectionLabels[section]}</h1>
+            <span className="toolbar-spacer" />
 
-          <div className="search-box">
-            <span className="search-box-icon"><Search size={16} /></span>
-            <input
-              id="search-input"
-              placeholder="Search accounts..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+            <div className="search-box">
+              <span className="search-box-icon"><Search size={16} /></span>
+              <input
+                id="search-input"
+                placeholder="Search accounts..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
 
-          {section !== 'trash' && section !== 'settings' && (
-            <button
-              id="add-entry-btn"
-              className="btn btn-add"
-              onClick={openAddModal}
-            >
-              <Plus size={16} /> Add Account
-            </button>
-          )}
+            {section !== 'trash' && (
+              <button
+                id="add-entry-btn"
+                className="btn btn-add"
+                onClick={openAddModal}
+              >
+                <Plus size={16} /> Add Account
+              </button>
+            )}
 
-          {section !== 'settings' && (
             <button
               className="btn btn-ghost"
               onClick={() => {
@@ -254,10 +256,10 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
             >
               {showAllPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
-        {section !== 'settings' && (
+        {section !== 'settings' && section !== 'mini_vault' && (
           <div className="group-filter-bar">
             <button
               className={`group-chip ${selectedGroupId ? '' : 'active'}`}
@@ -292,6 +294,8 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
         <div className="entry-list-container">
           {section === 'settings' ? (
             <SettingsView onShowToast={showToast} />
+          ) : section === 'mini_vault' ? (
+            <MiniVaultView onShowToast={showToast} onClose={() => setSection('all')} />
           ) : section === 'tree' ? (
             <FolderTree
               entries={entries}
@@ -343,12 +347,12 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
             'Lock Vault'
           }
           message={
-            confirmAction.type === 'delete' ? 'It will permanently delete the account and cannot be recovered.' :
+            confirmAction.type === 'delete' ? 'This will permanently delete the account. This action cannot be undone.' :
             confirmAction.type === 'deleteGroup' ? 'Are you sure you want to delete this group? All accounts inside will be moved to Uncategorized.' :
-            confirmAction.type === 'trash' ? 'Do you really want to delete the account?' :
-            confirmAction.type === 'restore' ? 'It will recover the account.' :
-            confirmAction.type === 'showAllPasswords' ? 'This will expose your credentials. Are you safe to use in a public area to avoid getting hacked?' :
-            'You will logout and the vault will be locked.'
+            confirmAction.type === 'trash' ? 'Are you sure you want to move this account to the trash?' :
+            confirmAction.type === 'restore' ? 'This will restore the account to your main list.' :
+            confirmAction.type === 'showAllPasswords' ? 'This will expose all your credentials on screen. Are you sure you are in a safe and private area?' :
+            'Your session will be ended and the vault will be locked.'
           }
           confirmText={
             confirmAction.type === 'delete' ? 'Delete Permanently' :

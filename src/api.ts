@@ -62,6 +62,7 @@ let mockGroups: GroupSummary[] = [];
 const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 export async function invoke<T>(cmd: string, args: Record<string, any> = {}): Promise<T> {
+  console.log(`[API] Invoking '${cmd}' (Tauri: ${isTauri})`, args);
   if (isTauri) {
     return tauriInvoke(cmd, args);
   } else {
@@ -172,6 +173,25 @@ export async function invoke<T>(cmd: string, args: Record<string, any> = {}): Pr
         console.log(`[API Mock] Changing master password to: ${args.input?.new_password}`);
         return undefined as any;
       }
+
+      case 'get_mini_vault_status': {
+        return { is_setup: localStorage.getItem('mini_vault_setup') === 'true', is_unlocked: false } as any;
+      }
+
+      case 'setup_mini_vault': {
+        localStorage.setItem('mini_vault_setup', 'true');
+        localStorage.setItem('mini_vault_pin', args.input?.pin);
+        return undefined as any;
+      }
+
+      case 'unlock_mini_vault': {
+        const saved = localStorage.getItem('mini_vault_pin');
+        if (saved === args.input?.pin) return undefined as any;
+        throw new Error('Invalid PIN');
+      }
+
+      case 'list_mini_entries': return [] as any;
+      case 'list_mini_notes': return [] as any;
 
       case 'copy_entry_secret':
       case 'copy_to_clipboard': {

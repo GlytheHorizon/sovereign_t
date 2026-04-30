@@ -1,7 +1,7 @@
 import React from 'react';
 import { Folder, Star, Trash2, Lock, Shield, Network } from 'lucide-react';
 
-export type Section = 'all' | 'favorites' | 'tree' | 'trash' | 'settings';
+export type Section = 'all' | 'favorites' | 'tree' | 'trash' | 'settings' | 'mini_vault';
 
 interface SidebarProps {
   section: Section;
@@ -15,6 +15,7 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'tree', label: 'Folder Tree', icon: <Network size={18} /> },
   { id: 'favorites', label: 'Favorites', icon: <Star size={18} /> },
   { id: 'trash', label: 'Trash', icon: <Trash2 size={18} /> },
+  { id: 'mini_vault', label: 'Mini Vault', icon: <Shield size={18} /> },
 ];
 
 const Sidebar: React.FC<SidebarProps> = React.memo(({ section, onSectionChange, counts, onLock }) => {

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { invoke } from './api';
-import { Shield, Eye, EyeOff, Lock, Unlock, AlertTriangle, Key, ArrowRight } from 'lucide-react';
+import { Shield, Eye, EyeOff, Lock, Unlock, AlertTriangle, Key, ArrowRight, X } from 'lucide-react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import ConfirmModal from './ConfirmModal';
 
 interface AuthScreenProps {
   onUnlocked: () => void;
@@ -14,6 +16,15 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+  const handleExit = async () => {
+    try {
+      await getCurrentWindow().close();
+    } catch (err) {
+      console.error('Failed to close window:', err);
+    }
+  };
 
   const checkVault = async () => {
     try {
@@ -81,6 +92,25 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
 
   return (
     <div className="auth-screen">
+      <button 
+        className="auth-exit-btn"
+        onClick={() => setShowExitConfirm(true)}
+        title="Exit Application"
+      >
+        <X size={20} />
+      </button>
+
+      {showExitConfirm && (
+        <ConfirmModal
+          title="Exit Sovereign_T"
+          message="Are you sure you want to close the application?"
+          confirmText="Exit"
+          danger={true}
+          onConfirm={handleExit}
+          onCancel={() => setShowExitConfirm(false)}
+        />
+      )}
+
       <div className="auth-logo-section">
         <div className="auth-logo-box">
           <img src="/stv2.png" alt="Sovereign_T" style={{ width: 50, height: 50, objectFit: 'contain' }} />
