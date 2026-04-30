@@ -293,7 +293,7 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
 
         <div className="entry-list-container">
           {section === 'settings' ? (
-            <SettingsView onShowToast={showToast} />
+            <SettingsView onShowToast={showToast} onLogout={executeLock} />
           ) : section === 'mini_vault' ? (
             <MiniVaultView onShowToast={showToast} onClose={() => setSection('all')} />
           ) : section === 'tree' ? (
