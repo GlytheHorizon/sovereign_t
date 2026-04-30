@@ -169,7 +169,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ editEntryId, entries, onC
 
   return (
     <div className="modal-overlay" onClick={onClose} onKeyDown={handleKeyDown}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 700 }}>
         {/* Header */}
         <div className="modal-header">
           <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -181,185 +181,187 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({ editEntryId, entries, onC
         </div>
 
         {/* Body */}
+        {/* Body */}
         <div className="modal-body">
           {error && (
-            <div className="auth-error">
+            <div className="auth-error" style={{ marginBottom: 16 }}>
               <span><AlertTriangle size={16} /></span> {error}
             </div>
           )}
 
-          {/* Title */}
-          <div className="form-group">
-            <label className="form-label">Title *</label>
-            <input
-              id="entry-title"
-              className="form-input"
-              placeholder="e.g. Google, Discord, Binance..."
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              autoFocus
-            />
-          </div>
-
-          {/* Group */}
-          <div className="form-group">
-            <label className="form-label">Group</label>
-            <select
-              className="form-input"
-              value={groupId}
-              onChange={(e) => setGroupId(e.target.value)}
-            >
-              <option value="">No group</option>
-              {groups.map((group) => (
-                <option key={group.group_id} value={group.group_id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Login Method */}
-          <div className="form-group">
-            <label className="form-label">Type / Method</label>
-            <select
-              className="form-input"
-              value={loginMethod}
-              onChange={(e) => setLoginMethod(e.target.value as any)}
-            >
-              <option value="password">Standard Password</option>
-              <option value="crypto">Crypto Wallet / Seed Phrase</option>
-              <option value="google">Login with Google</option>
-              <option value="apple">Login with Apple</option>
-              <option value="facebook">Login with Facebook</option>
-            </select>
-          </div>
-
-          {/* Email / Username */}
-          <div className="form-group">
-            <label className="form-label">Email / Username</label>
-            <input
-              id="entry-username"
-              className="form-input"
-              placeholder={loginMethod === 'crypto' ? 'e.g. Wallet Name / Email' : 'e.g. user@gmail.com'}
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
-          </div>
-
-          {/* Password / Crypto Seed */}
-          {(loginMethod === 'password' || loginMethod === 'crypto') && (
-            <div className="form-group">
-              <label className="form-label">
-                  {loginMethod === 'crypto' ? 'Seed Phrase / Private Key *' : 'Password *'}
-              </label>
-              <div className="password-generate-row">
-                <div className="form-input-wrapper" style={{ flex: 1 }}>
-                  {loginMethod === 'crypto' ? (
-                    <textarea 
-                        className="form-input"
-                      placeholder="Enter seed phrase or private key"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        style={{ fontFamily: "'JetBrains Mono', monospace", resize: 'vertical' }}
-                        rows={2}
-                     />
-                  ) : (
-                     <input
-                       id="entry-password"
-                       className="form-input"
-                       type={showPassword ? 'text' : 'password'}
-                       placeholder="Enter password"
-                       value={password}
-                       onChange={(e) => setPassword(e.target.value)}
-                       style={{ fontFamily: showPassword ? "'JetBrains Mono', monospace" : 'inherit' }}
-                     />
-                  )}
-                  {loginMethod !== 'crypto' && (
-                     <button
-                       type="button"
-                       className="form-input-btn"
-                       onClick={() => {
-                         if (!showPassword) {
-                           setConfirmShowPassword(true);
-                         } else {
-                           setShowPassword(false);
-                         }
-                       }}
-                       title={showPassword ? 'Hide password' : 'Show password'}
-                     >
-                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                     </button>
-                  )}
-                </div>
-                {loginMethod !== 'crypto' && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={handleGenerate}
-                    title="Generate secure password"
-                    style={{ flexShrink: 0 }}
-                  >
-                    <Dices size={16} /> Generate
-                  </button>
-                )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+            {/* Left Column */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Title *</label>
+                <input
+                  id="entry-title"
+                  className="form-input"
+                  placeholder="e.g. Google, Discord, Binance..."
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  autoFocus
+                />
               </div>
-              {/* Strength meter */}
-              {password && loginMethod !== 'crypto' && (
-                <div style={{ marginTop: 6 }}>
-                  <div className="password-strength">
-                    {[1, 2, 3, 4].map((i) => (
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Group</label>
+                <select
+                  className="form-input"
+                  value={groupId}
+                  onChange={(e) => setGroupId(e.target.value)}
+                >
+                  <option value="">No group</option>
+                  {groups.map((group) => (
+                    <option key={group.group_id} value={group.group_id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Type / Method</label>
+                <select
+                  className="form-input"
+                  value={loginMethod}
+                  onChange={(e) => setLoginMethod(e.target.value as any)}
+                >
+                  <option value="password">Standard Password</option>
+                  <option value="crypto">Crypto Wallet / Seed Phrase</option>
+                  <option value="google">Login with Google</option>
+                  <option value="apple">Login with Apple</option>
+                  <option value="facebook">Login with Facebook</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">URL (Optional)</label>
+                <input
+                  id="entry-url"
+                  className="form-input"
+                  placeholder="https://..."
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Right Column */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Email / Username</label>
+                <input
+                  id="entry-username"
+                  className="form-input"
+                  placeholder={loginMethod === 'crypto' ? 'e.g. Wallet Name / Email' : 'e.g. user@gmail.com'}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+              </div>
+
+              {(loginMethod === 'password' || loginMethod === 'crypto') && (
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">
+                      {loginMethod === 'crypto' ? 'Seed Phrase / Private Key *' : 'Password *'}
+                  </label>
+                  <div className="password-generate-row">
+                    <div className="form-input-wrapper" style={{ flex: 1 }}>
+                      {loginMethod === 'crypto' ? (
+                        <textarea 
+                            className="form-input"
+                          placeholder="Enter seed phrase or private key"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            style={{ fontFamily: "'JetBrains Mono', monospace", resize: 'vertical' }}
+                            rows={2}
+                         />
+                      ) : (
+                         <input
+                           id="entry-password"
+                           className="form-input"
+                           type={showPassword ? 'text' : 'password'}
+                           placeholder="Enter password"
+                           value={password}
+                           onChange={(e) => setPassword(e.target.value)}
+                           style={{ fontFamily: showPassword ? "'JetBrains Mono', monospace" : 'inherit' }}
+                         />
+                      )}
+                      {loginMethod !== 'crypto' && (
+                         <button
+                           type="button"
+                           className="form-input-btn"
+                           onClick={() => {
+                             if (!showPassword) {
+                               setConfirmShowPassword(true);
+                             } else {
+                               setShowPassword(false);
+                             }
+                           }}
+                           title={showPassword ? 'Hide password' : 'Show password'}
+                         >
+                           {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                         </button>
+                      )}
+                    </div>
+                    {loginMethod !== 'crypto' && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={handleGenerate}
+                        title="Generate secure password"
+                        style={{ flexShrink: 0 }}
+                      >
+                        <Dices size={16} /> Generate
+                      </button>
+                    )}
+                  </div>
+                  {/* Strength meter */}
+                  {password && loginMethod !== 'crypto' && (
+                    <div style={{ marginTop: 6 }}>
+                      <div className="password-strength">
+                        {[1, 2, 3, 4].map((i) => (
+                          <div
+                            key={i}
+                            className={`password-strength-bar ${
+                              i <= strengthLevel ? strengthClasses[strengthLevel] : ''
+                            }`}
+                          />
+                        ))}
+                      </div>
                       <div
-                        key={i}
-                        className={`password-strength-bar ${
-                          i <= strengthLevel ? strengthClasses[strengthLevel] : ''
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      marginTop: 4,
-                      color:
-                        strengthLevel <= 1
-                          ? 'var(--danger)'
-                          : strengthLevel === 2
-                          ? 'var(--warning)'
-                          : strengthLevel === 3
-                          ? 'var(--accent)'
-                          : 'var(--success)',
-                    }}
-                  >
-                    {strengthLabels[strengthLevel]}
-                  </div>
+                        style={{
+                          fontSize: 11,
+                          marginTop: 4,
+                          color:
+                            strengthLevel <= 1
+                              ? 'var(--danger)'
+                              : strengthLevel === 2
+                              ? 'var(--warning)'
+                              : strengthLevel === 3
+                              ? 'var(--accent)'
+                              : 'var(--success)',
+                        }}
+                      >
+                        {strengthLabels[strengthLevel]}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
+
+              <div className="form-group" style={{ marginBottom: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <label className="form-label">Notes</label>
+                <textarea
+                  id="entry-notes"
+                  className="form-input"
+                  placeholder="Optional notes, backup codes, etc."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  style={{ flex: 1, minHeight: loginMethod === 'crypto' ? '60px' : '100px' }}
+                />
+              </div>
             </div>
-          )}
-
-          {/* URL */}
-          <div className="form-group">
-            <label className="form-label">URL (Optional)</label>
-            <input
-              id="entry-url"
-              className="form-input"
-              placeholder="https://..."
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-            />
-          </div>
-
-          {/* Notes */}
-          <div className="form-group">
-            <label className="form-label">Notes</label>
-            <textarea
-              id="entry-notes"
-              className="form-input"
-              placeholder="Optional notes, backup codes, etc."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-            />
           </div>
         </div>
 

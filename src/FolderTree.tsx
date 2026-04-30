@@ -22,12 +22,7 @@ const FolderTree: React.FC<FolderTreeProps> = ({ entries, groups, onEditClick, o
 
   const uncategorized = entries.filter(e => !e.group_id);
 
-  const getInitial = (title: string) => title.charAt(0).toUpperCase();
-
   const renderEntry = (entry: EntrySummary) => {
-    const match = entry.username.match(/^\$\$(google|apple|facebook|crypto)\$\$(.*)$/);
-    const displayUsername = match ? match[2] : entry.username;
-
     return (
       <div key={entry.entry_id} className="tree-item" onClick={() => onInfoClick(entry.entry_id)}>
         <div className="tree-item-icon">
@@ -35,7 +30,6 @@ const FolderTree: React.FC<FolderTreeProps> = ({ entries, groups, onEditClick, o
         </div>
         <div className="tree-item-content">
           <span className="tree-item-title">{entry.title}</span>
-          {displayUsername && <span className="tree-item-user">{displayUsername}</span>}
         </div>
       </div>
     );

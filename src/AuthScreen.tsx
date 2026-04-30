@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { invoke } from './api';
-import { Shield, Eye, EyeOff, Lock, Unlock, AlertTriangle } from 'lucide-react';
+import { Shield, Eye, EyeOff, Lock, Unlock, AlertTriangle, Key, ArrowRight } from 'lucide-react';
 
 interface AuthScreenProps {
   onUnlocked: () => void;
@@ -52,16 +52,17 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
       setPassword('');
       setConfirmPassword('');
       
+      // Speed up progress timer for faster login feel
       let p = 0;
       const interval = setInterval(() => {
-        p += 5;
+        p += 10;
         setProgress(p);
         if (p >= 100) {
           clearInterval(interval);
           setLoading(false);
           onUnlocked();
         }
-      }, 50);
+      }, 20);
     } catch (e: any) {
       setError(e?.message || 'Authentication failed.');
       setLoading(false);
@@ -80,89 +81,94 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
 
   return (
     <div className="auth-screen">
-      <div className="auth-card">
-        <div className="auth-logo">
-          <div className="auth-logo-icon">
-            <Shield size={24} color="white" />
-          </div>
-          <div className="auth-logo-text">Sovereigni-T</div>
+      <div className="auth-logo-section">
+        <div className="auth-logo-box">
+          <img src="/stv2.png" alt="Sovereign_T" style={{ width: 50, height: 50, objectFit: 'contain' }} />
         </div>
-        
-        <div className="auth-subtitle" style={{ marginTop: 0 }}>
-          {mode === 'create'
-            ? 'Create a master password to initialize this vault.'
-            : 'Enter your master password to unlock this vault.'}
-        </div>
+        <h1 className="auth-brand-name">SOVEREIGN_T</h1>
+        <p className="auth-brand-subtitle">Secure Digital Vault</p>
+      </div>
 
-        <form className="auth-form" onSubmit={handleSubmit}>
+      <div className="auth-card-polished">
+        <form onSubmit={handleSubmit}>
           {error && (
-            <div className="auth-error">
+            <div className="auth-error" style={{ marginBottom: 20 }}>
               <span><AlertTriangle size={16} /></span> {error}
             </div>
           )}
 
           {progress > 0 && progress < 100 && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, textAlign: 'center' }}>Decrypting Vault... {progress}%</div>
-              <div style={{ height: 4, background: 'var(--bg-tertiary)', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, textAlign: 'center' }}>
+                Decrypting Vault... {progress}%
+              </div>
+              <div style={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
                 <div style={{ width: `${progress}%`, height: '100%', background: 'var(--accent)', transition: 'width 0.05s linear' }} />
               </div>
             </div>
           )}
 
-          <div className="form-group" style={{ opacity: progress > 0 ? 0.5 : 1, pointerEvents: progress > 0 ? 'none' : 'auto' }}>
-            <label className="form-label">
-              {mode === 'create' ? 'Create Master Password' : 'Master Password'}
-            </label>
-            <div className="form-input-wrapper">
-              <input
-                id="master-password"
-                className="form-input"
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Min. 12 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoFocus
-              />
-              <button
-                type="button"
-                className="form-input-btn"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
+          <label className="auth-label-polished">Master Password</label>
+          <div className="auth-input-wrapper-polished">
+            <span className="auth-input-icon-left"><Key size={18} /></span>
+            <input
+              id="master-password"
+              className="auth-input-polished"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Enter secure phrase..."
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoFocus
+              disabled={loading}
+            />
+            <button
+              type="button"
+              className="auth-input-icon-right"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
 
           {mode === 'create' && (
-            <div className="form-group">
-              <label className="form-label">Confirm Master Password</label>
-              <input
-                id="confirm-password"
-                className="form-input"
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Repeat your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
+            <>
+              <label className="auth-label-polished">Confirm Master Password</label>
+              <div className="auth-input-wrapper-polished">
+                <span className="auth-input-icon-left"><Key size={18} /></span>
+                <input
+                  id="confirm-password"
+                  className="auth-input-polished"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Repeat secure phrase..."
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+            </>
           )}
 
           <button
             id="auth-submit-btn"
-            className="btn btn-primary"
+            className="auth-btn-cyan"
             type="submit"
             disabled={loading}
           >
             {loading ? (
-              <span className="spinner" />
+              <span className="spinner" style={{ borderTopColor: '#000' }} />
             ) : mode === 'create' ? (
-              <><Lock size={16} /> Create Vault</>
+              <>Initialize Vault <ArrowRight size={18} /></>
             ) : (
-              <><Unlock size={16} /> Unlock Vault</>
+              <>Unlock Vault <ArrowRight size={18} /></>
             )}
           </button>
+
+          <span className="auth-recovery-link">Initiate Recovery Protocol?</span>
         </form>
+      </div>
+
+      <div className="auth-footer-session">
+        <Lock size={12} /> End-to-end Encrypted Session
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Clock, FileText, Link, Shield } from 'lucide-react';
+import { X, Clock, FileText, Link, Shield, User, Key, Eye, EyeOff } from 'lucide-react';
 import { invoke, EntrySummary } from './api';
 
 interface InfoModalProps {
@@ -9,12 +9,17 @@ interface InfoModalProps {
 
 const InfoModal: React.FC<InfoModalProps> = ({ entry, onClose }) => {
   const [notes, setNotes] = useState<string>('Loading notes...');
+  const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     invoke<{password: string, notes: string}>('get_entry_secrets', { entryId: entry.entry_id })
-      .then(res => setNotes(res.notes || 'No notes available.'))
-      .catch(() => setNotes('Failed to load notes.'))
+      .then(res => {
+        setNotes(res.notes || 'No notes available.');
+        setPassword(res.password);
+      })
+      .catch(() => setNotes('Failed to load secrets.'))
       .finally(() => setLoading(false));
   }, [entry]);
 
@@ -56,6 +61,48 @@ const InfoModal: React.FC<InfoModalProps> = ({ entry, onClose }) => {
               </div>
             </div>
           )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, marginBottom: 4 }}>
+                <User size={14} /> Username / Email
+              </div>
+              <div style={{ fontSize: 14 }}>
+                {(() => {
+                  const match = entry.username.match(/^\$\$(google|apple|facebook|crypto)\$\$(.*)$/);
+                  return match ? match[2] : entry.username;
+                })() || '(None)'}
+              </div>
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, marginBottom: 4 }}>
+                <Shield size={14} /> Type
+              </div>
+              <div style={{ fontSize: 14, textTransform: 'capitalize' }}>
+                {(() => {
+                  const match = entry.username.match(/^\$\$(google|apple|facebook|crypto)\$\$(.*)$/);
+                  return match ? match[1] : 'Standard Password';
+                })()}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>
+                <Key size={14} /> Password / Secret
+              </div>
+              <button 
+                onClick={() => setShowPassword(!showPassword)}
+                style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}
+              >
+                {showPassword ? <><EyeOff size={14} /> Hide</> : <><Eye size={14} /> Show</>}
+              </button>
+            </div>
+            <div style={{ fontSize: 14, background: 'var(--bg-tertiary)', padding: 12, borderRadius: 8, fontFamily: showPassword ? "'JetBrains Mono', monospace" : 'inherit', letterSpacing: showPassword ? 'normal' : '4px', overflowWrap: 'break-word' }}>
+              {loading ? '••••••••' : (showPassword ? password : '••••••••')}
+            </div>
+          </div>
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, marginBottom: 4 }}>

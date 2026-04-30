@@ -168,6 +168,11 @@ export async function invoke<T>(cmd: string, args: Record<string, any> = {}): Pr
         return 'Mock-Secure-Pass-123!' as any;
       }
 
+      case 'change_master_password': {
+        console.log(`[API Mock] Changing master password to: ${args.newPassword}`);
+        return undefined as any;
+      }
+
       case 'copy_entry_secret':
       case 'copy_to_clipboard': {
         console.log(`[API Mock] Copied to clipboard!`);

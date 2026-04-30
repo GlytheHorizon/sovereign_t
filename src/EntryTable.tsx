@@ -16,7 +16,7 @@ interface EntryTableProps {
   groups: GroupSummary[];
 }
 
-const EntryTable: React.FC<EntryTableProps> = ({
+const EntryTable: React.FC<EntryTableProps> = React.memo(({
   entries,
   section,
   onToggleFavorite,
@@ -203,19 +203,21 @@ const EntryTable: React.FC<EntryTableProps> = ({
               </td>
 
               <td>
-                {isSocial ? (
-                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', background: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: 4 }}>
-                    {customLabel}
+                <div className="entry-password-cell" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ 
+                    fontFamily: (showAllPasswords && !isSocial) ? 'monospace' : 'inherit',
+                    fontSize: (showAllPasswords && isSocial) ? 12 : 'inherit',
+                    fontWeight: (showAllPasswords && isSocial) ? 500 : 'normal',
+                    color: (showAllPasswords && isSocial) ? 'var(--text-primary)' : 'inherit',
+                    background: (showAllPasswords && isSocial) ? 'var(--bg-tertiary)' : 'transparent',
+                    padding: (showAllPasswords && isSocial) ? '2px 8px' : '0',
+                    borderRadius: (showAllPasswords && isSocial) ? 4 : '0',
+                  }}>
+                    {showAllPasswords 
+                      ? (isSocial ? customLabel : (visiblePasswords[entry.entry_id] || '••••••••••••'))
+                      : '••••••••••••'}
                   </span>
-                ) : (
-                  <div className="entry-password-cell" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                     <span style={{ fontFamily: showAllPasswords ? 'monospace' : 'inherit' }}>
-                       {showAllPasswords && visiblePasswords[entry.entry_id]
-                         ? visiblePasswords[entry.entry_id]
-                         : '••••••••••••'}
-                     </span>
-                  </div>
-                )}
+                </div>
               </td>
 
               <td>
@@ -285,6 +287,6 @@ const EntryTable: React.FC<EntryTableProps> = ({
     )}
     </>
   );
-};
+});
 
 export default EntryTable;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Folder, Star, Trash2, Lock, Shield, Network } from 'lucide-react';
 
-export type Section = 'all' | 'favorites' | 'tree' | 'trash';
+export type Section = 'all' | 'favorites' | 'tree' | 'trash' | 'settings';
 
 interface SidebarProps {
   section: Section;
@@ -17,17 +17,15 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'trash', label: 'Trash', icon: <Trash2 size={18} /> },
 ];
 
-const Sidebar: React.FC<SidebarProps> = ({ section, onSectionChange, counts, onLock }) => {
+const Sidebar: React.FC<SidebarProps> = React.memo(({ section, onSectionChange, counts, onLock }) => {
   return (
     <aside className="sidebar">
       {/* Brand */}
       <div className="sidebar-header">
         <div className="sidebar-brand">
-          <div className="sidebar-brand-icon">
-            <Shield size={20} color="white" />
-          </div>
+          <img src="/stv2.png" alt="Sovereign_T" style={{ width: 28, height: 28, objectFit: 'contain', marginRight: 10 }} />
           <div>
-            <div className="sidebar-brand-text">Sovereigni-T</div>
+            <div className="sidebar-brand-text">Sovereign_T</div>
             <div className="sidebar-brand-sub">Password Vault</div>
           </div>
         </div>
@@ -51,6 +49,14 @@ const Sidebar: React.FC<SidebarProps> = ({ section, onSectionChange, counts, onL
 
       {/* Footer */}
       <div className="sidebar-footer">
+        <button 
+          id="settings-btn" 
+          className={`sidebar-footer-btn ${section === 'settings' ? 'active' : ''}`}
+          onClick={() => onSectionChange('settings')}
+        >
+          <span className="sidebar-link-icon"><Shield size={18} /></span>
+          Settings
+        </button>
         <button id="lock-vault-btn" className="sidebar-footer-btn" onClick={onLock}>
           <span className="sidebar-link-icon"><Lock size={18} /></span>
           Lock Vault
@@ -58,6 +64,6 @@ const Sidebar: React.FC<SidebarProps> = ({ section, onSectionChange, counts, onL
       </div>
     </aside>
   );
-};
+});
 
 export default Sidebar;

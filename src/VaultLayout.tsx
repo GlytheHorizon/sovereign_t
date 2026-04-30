@@ -7,6 +7,7 @@ import { invoke, EntrySummary, GroupSummary } from './api';
 import { Search, Plus, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import InfoModal from './InfoModal';
+import SettingsView from './SettingsView';
 
 interface VaultLayoutProps {
   onLocked: () => void;
@@ -198,6 +199,7 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
     tree: 'Folder Tree',
     favorites: 'Favorites',
     trash: 'Trash',
+    settings: 'Settings',
   };
 
   return (
@@ -228,7 +230,7 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
             />
           </div>
 
-          {section !== 'trash' && (
+          {section !== 'trash' && section !== 'settings' && (
             <button
               id="add-entry-btn"
               className="btn btn-add"
@@ -238,53 +240,59 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
             </button>
           )}
 
-          <button
-            className="btn btn-ghost"
-            onClick={() => {
-              if (!showAllPasswords) {
-                setConfirmAction({ type: 'showAllPasswords' });
-              } else {
-                setShowAllPasswords(false);
-              }
-            }}
-            title={showAllPasswords ? 'Hide all passwords' : 'Show all passwords'}
-          >
-            {showAllPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
-          </button>
+          {section !== 'settings' && (
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                if (!showAllPasswords) {
+                  setConfirmAction({ type: 'showAllPasswords' });
+                } else {
+                  setShowAllPasswords(false);
+                }
+              }}
+              title={showAllPasswords ? 'Hide all passwords' : 'Show all passwords'}
+            >
+              {showAllPasswords ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          )}
         </div>
 
-        <div className="group-filter-bar">
-          <button
-            className={`group-chip ${selectedGroupId ? '' : 'active'}`}
-            onClick={() => setSelectedGroupId('')}
-          >
-            All
-          </button>
-          {groups.map((group) => (
+        {section !== 'settings' && (
+          <div className="group-filter-bar">
             <button
-              key={group.group_id}
-              className={`group-chip ${selectedGroupId === group.group_id ? 'active' : ''}`}
-              onClick={() => setSelectedGroupId(group.group_id)}
+              className={`group-chip ${selectedGroupId ? '' : 'active'}`}
+              onClick={() => setSelectedGroupId('')}
             >
-              <span className="group-color-dot" style={{ background: group.color }} />
-              {group.name}
-              {selectedGroupId === group.group_id && (
-                <span
-                  className="group-clear-btn"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setSelectedGroupId('');
-                  }}
-                >
-                  x
-                </span>
-              )}
+              All
             </button>
-          ))}
-        </div>
+            {groups.map((group) => (
+              <button
+                key={group.group_id}
+                className={`group-chip ${selectedGroupId === group.group_id ? 'active' : ''}`}
+                onClick={() => setSelectedGroupId(group.group_id)}
+              >
+                <span className="group-color-dot" style={{ background: group.color }} />
+                {group.name}
+                {selectedGroupId === group.group_id && (
+                  <span
+                    className="group-clear-btn"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedGroupId('');
+                    }}
+                  >
+                    x
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="entry-list-container">
-          {section === 'tree' ? (
+          {section === 'settings' ? (
+            <SettingsView onShowToast={showToast} />
+          ) : section === 'tree' ? (
             <FolderTree
               entries={entries}
               groups={groups}
