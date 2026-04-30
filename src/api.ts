@@ -169,7 +169,7 @@ export async function invoke<T>(cmd: string, args: Record<string, any> = {}): Pr
       }
 
       case 'change_master_password': {
-        console.log(`[API Mock] Changing master password to: ${args.newPassword}`);
+        console.log(`[API Mock] Changing master password to: ${args.input?.new_password}`);
         return undefined as any;
       }
 

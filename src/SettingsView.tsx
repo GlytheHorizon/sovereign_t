@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Key, Info, User, CheckCircle2, XCircle } from 'lucide-react';
+import { Shield, Key, Info, User, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
 import { invoke } from './api';
 
 interface SettingsViewProps {
@@ -11,10 +11,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast }) => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (newPassword.length < 12) {
       onShowToast('New password must be at least 12 characters.', 'error');
       return;
@@ -27,7 +30,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast }) => {
 
     setLoading(true);
     try {
-      await invoke('change_master_password', { oldPassword, newPassword });
+      await invoke('change_master_password', { 
+        input: { 
+          old_password: oldPassword, 
+          new_password: newPassword 
+        } 
+      });
       onShowToast('Master password changed successfully.', 'success');
       setOldPassword('');
       setNewPassword('');
@@ -48,47 +56,74 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast }) => {
             <Key size={20} /> Change Master Password
           </h2>
           <p className="settings-description">
-            Changing your master password will re-encrypt your entire vault. 
+            Changing your master password will re-encrypt your entire vault.
             Make sure to remember your new password, as it cannot be recovered.
           </p>
-          
+
           <form className="settings-form" onSubmit={handleChangePassword}>
             <div className="form-group">
               <label className="form-label">Current Master Password</label>
-              <input
-                type="password"
-                className="form-input"
-                value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)}
-                placeholder="Enter current password"
-                required
-              />
+              <div className="form-input-wrapper">
+                <input
+                  type={showOldPassword ? "text" : "password"}
+                  className="form-input"
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  required
+                />
+                <button 
+                  type="button" 
+                  className="form-input-btn"
+                  onClick={() => setShowOldPassword(!showOldPassword)}
+                >
+                  {showOldPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
             
             <div className="form-group">
               <label className="form-label">New Master Password</label>
-              <input
-                type="password"
-                className="form-input"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Min. 12 characters"
-                required
-              />
+              <div className="form-input-wrapper">
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  className="form-input"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Min. 12 characters"
+                  required
+                />
+                <button 
+                  type="button" 
+                  className="form-input-btn"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                >
+                  {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
             
             <div className="form-group">
               <label className="form-label">Confirm New Master Password</label>
-              <input
-                type="password"
-                className="form-input"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Repeat new password"
-                required
-              />
+              <div className="form-input-wrapper">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  className="form-input"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repeat new password"
+                  required
+                />
+                <button 
+                  type="button" 
+                  className="form-input-btn"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
-            
+
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? <span className="spinner" /> : 'Update Master Password'}
             </button>
@@ -111,8 +146,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast }) => {
             <div className="about-item">
               <Shield size={18} className="about-icon" />
               <div className="about-content">
-                <span className="about-label">Version</span>
-                <span className="about-value">V3.5 Build 0430261235PMS</span>
+                <span className="about-label">Version  </span>
+                <span className="about-value">V3.5 </span>
+              </div>
+            </div>
+            <div className="about-item">
+              <Shield size={18} className="about-icon" />
+              <div className="about-content">
+                <span className="about-label">Build</span>
+                <span className="about-value">Build 0430260123PMS</span>
               </div>
             </div>
           </div>
