@@ -30,11 +30,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast }) => {
 
     setLoading(true);
     try {
-      await invoke('change_master_password', { 
-        input: { 
-          old_password: oldPassword, 
-          new_password: newPassword 
-        } 
+      await invoke('change_master_password', {
+        input: {
+          old_password: oldPassword,
+          new_password: newPassword
+        }
       });
       onShowToast('Master password changed successfully.', 'success');
       setOldPassword('');
@@ -72,8 +72,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast }) => {
                   placeholder="Enter current password"
                   required
                 />
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="form-input-btn"
                   onClick={() => setShowOldPassword(!showOldPassword)}
                 >
@@ -81,7 +81,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast }) => {
                 </button>
               </div>
             </div>
-            
+
             <div className="form-group">
               <label className="form-label">New Master Password</label>
               <div className="form-input-wrapper">
@@ -93,8 +93,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast }) => {
                   placeholder="Min. 12 characters"
                   required
                 />
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="form-input-btn"
                   onClick={() => setShowNewPassword(!showNewPassword)}
                 >
@@ -102,7 +102,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast }) => {
                 </button>
               </div>
             </div>
-            
+
             <div className="form-group">
               <label className="form-label">Confirm New Master Password</label>
               <div className="form-input-wrapper">
@@ -114,8 +114,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast }) => {
                   placeholder="Repeat new password"
                   required
                 />
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="form-input-btn"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
@@ -147,18 +147,18 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast }) => {
               <Shield size={18} className="about-icon" />
               <div className="about-content">
                 <span className="about-label">Version  </span>
-                <span className="about-value">V3.5 </span>
+                <span className="about-value">V4.0 </span>
               </div>
             </div>
             <div className="about-item">
               <Shield size={18} className="about-icon" />
               <div className="about-content">
                 <span className="about-label">Build</span>
-                <span className="about-value">Build 0430260123PMS</span>
+                <span className="about-value">Build 0430260504PMS</span>
               </div>
             </div>
           </div>
-          
+
           <h2 className="settings-title" style={{ marginTop: 32 }}>
             <Cpu size={20} /> Technology & Features
           </h2>
@@ -175,8 +175,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast }) => {
               <div className="about-content">
                 <span className="about-label">Special Features</span>
                 <span className="about-value" style={{ lineHeight: 1.4 }}>
-                  AES-256-GCM Encryption, Mini Vault,<br/>
-                  Glassmorphism UI, Zero-Knowledge Architecture
+                  AES-256-GCM Encryption, Mini Vault,<br />
+                  Zero-Knowledge Architecture
                 </span>
               </div>
             </div>
