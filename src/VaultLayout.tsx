@@ -1,14 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Sidebar, { Section } from './Sidebar';
 import EntryTable from './EntryTable';
 import FolderTree from './FolderTree';
 import AddEntryModal from './AddEntryModal';
 import { invoke, EntrySummary, GroupSummary } from './api';
-import { Search, Plus, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
+import { Search, Plus, CheckCircle2, XCircle, Eye, EyeOff, ChevronDown, ChevronUp, Layers } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import InfoModal from './InfoModal';
 import SettingsView from './SettingsView';
 import MiniVaultView from './MiniVaultView';
+import MergeGroupsModal from './MergeGroupsModal';
+import RenameGroupModal from './RenameGroupModal';
+import DashboardView from './DashboardView';
+import { normalizedEmailKey, displayUsername, sortEmailFilterOptions, isEmailLike } from './entryDisplay';
 
 interface VaultLayoutProps {
   onLocked: () => void;
@@ -27,10 +31,15 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
   const [editEntryId, setEditEntryId] = useState<string | undefined>(undefined);
   
   const [search, setSearch] = useState('');
+  const [emailFilter, setEmailFilter] = useState('');
   const [showAllPasswords, setShowAllPasswords] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   // Modals state
+  const [groupRibbonExpanded, setGroupRibbonExpanded] = useState(true);
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [renameGroup, setRenameGroup] = useState<GroupSummary | null>(null);
+
   const [infoEntry, setInfoEntry] = useState<EntrySummary | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
     type: 'trash' | 'delete' | 'restore' | 'lock' | 'showAllPasswords' | 'deleteGroup';
@@ -63,7 +72,30 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
     fetchAll();
   }, [fetchAll]);
 
+  const emailOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    const add = (e: EntrySummary) => {
+      const key = normalizedEmailKey(e.username);
+      if (!key) return;
+      if (!map.has(key)) map.set(key, displayUsername(e.username).trim() || key);
+    };
+    allEntries.forEach(add);
+    trashEntries.forEach(add);
+    return sortEmailFilterOptions(Array.from(map.entries()).map(([value, label]) => ({ value, label })));
+  }, [allEntries, trashEntries]);
+
+  const emailOptionsGrouped = useMemo(() => {
+    const emails = emailOptions.filter((o) => isEmailLike(o.label));
+    const other = emailOptions.filter((o) => !isEmailLike(o.label));
+    return { emails, other };
+  }, [emailOptions]);
+
   useEffect(() => {
+    if (section === 'dashboard') {
+      setEntries([]);
+      return;
+    }
+
     let source: EntrySummary[];
     switch (section) {
       case 'favorites': source = favEntries; break;
@@ -71,8 +103,31 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
       default: source = allEntries;
     }
 
+    if (section === 'tree') {
+      if (selectedGroupId) {
+        source = source.filter((entry) => entry.group_id === selectedGroupId);
+      }
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        source = source.filter((entry) => {
+          if (!entry.group_id) {
+            return 'uncategorized'.includes(q);
+          }
+          const g = groups.find((gr) => gr.group_id === entry.group_id);
+          if (!g) return false;
+          return g.name.toLowerCase().includes(q);
+        });
+      }
+      setEntries(source);
+      return;
+    }
+
     if (selectedGroupId) {
       source = source.filter((entry) => entry.group_id === selectedGroupId);
+    }
+
+    if (emailFilter) {
+      source = source.filter((e) => normalizedEmailKey(e.username) === emailFilter);
     }
 
     if (search.trim()) {
@@ -86,7 +141,7 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
     }
 
     setEntries(source);
-  }, [section, allEntries, favEntries, trashEntries, search, selectedGroupId]);
+  }, [section, allEntries, favEntries, trashEntries, search, emailFilter, selectedGroupId, groups]);
 
   const handleSaved = (title: string) => {
     setShowModal(false);
@@ -169,6 +224,44 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
     }
   };
 
+  const handleRenameGroup = async (name: string) => {
+    if (!renameGroup) return;
+    try {
+      await invoke<GroupSummary>('update_group', { input: { group_id: renameGroup.group_id, name } });
+      showToast(`Group renamed to "${name}".`);
+      setRenameGroup(null);
+      fetchAll();
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to rename group.', 'error');
+    }
+  };
+
+  const handleMergeGroups = async (sourceGroupIds: string[], name: string, color: string) => {
+    try {
+      await invoke<GroupSummary>('merge_groups', {
+        input: { source_group_ids: sourceGroupIds, name, color },
+      });
+      showToast(`Merged into "${name}".`);
+      setMergeModalOpen(false);
+      setSelectedGroupId('');
+      fetchAll();
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to merge groups.', 'error');
+    }
+  };
+
+  const treeDisplayGroups = useMemo(() => {
+    if (section !== 'tree') return groups;
+    let g = groups;
+    if (selectedGroupId) {
+      g = g.filter((x) => x.group_id === selectedGroupId);
+    } else if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      g = g.filter((gr) => gr.name.toLowerCase().includes(q));
+    }
+    return g;
+  }, [section, groups, selectedGroupId, search]);
+
   const handleLock = async () => {
     setConfirmAction({ type: 'lock' });
   };
@@ -191,11 +284,15 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
   };
 
   const openInfoModal = (id: string) => {
-    const entry = entries.find(e => e.entry_id === id);
+    const entry =
+      allEntries.find((e) => e.entry_id === id) ||
+      favEntries.find((e) => e.entry_id === id) ||
+      trashEntries.find((e) => e.entry_id === id);
     if (entry) setInfoEntry(entry);
   };
 
   const sectionLabels: Record<Section, string> = {
+    dashboard: 'Dashboard',
     all: 'All Items',
     tree: 'Folder Tree',
     favorites: 'Favorites',
@@ -218,16 +315,46 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
       />
 
       <div className="main-content">
-        {section !== 'settings' && section !== 'mini_vault' && (
+        {section !== 'settings' && section !== 'mini_vault' && section !== 'dashboard' && (
           <div className="toolbar">
             <h1 className="toolbar-title">{sectionLabels[section]}</h1>
             <span className="toolbar-spacer" />
+
+            {(section === 'all' || section === 'favorites' || section === 'trash') && (
+              <select
+                className="toolbar-email-filter"
+                value={emailFilter}
+                onChange={(e) => setEmailFilter(e.target.value)}
+                title="Filter by email or username (sorted by provider, then address)"
+                aria-label="Filter by email or username"
+              >
+                <option value="">All emails / usernames</option>
+                {emailOptionsGrouped.emails.length > 0 && (
+                  <optgroup label="Email addresses (Gmail & common providers first)">
+                    {emailOptionsGrouped.emails.map(({ value, label }) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {emailOptionsGrouped.other.length > 0 && (
+                  <optgroup label="Usernames & other">
+                    {emailOptionsGrouped.other.map(({ value, label }) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            )}
 
             <div className="search-box">
               <span className="search-box-icon"><Search size={16} /></span>
               <input
                 id="search-input"
-                placeholder="Search accounts..."
+                placeholder={section === 'tree' ? 'Search group names...' : 'Search accounts...'}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -259,51 +386,76 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
           </div>
         )}
 
-        {section !== 'settings' && section !== 'mini_vault' && (
-          <div className="group-filter-bar">
+        {section !== 'settings' && section !== 'mini_vault' && section !== 'dashboard' && (
+          <div className={`group-filter-bar ${groupRibbonExpanded ? '' : 'collapsed'}`}>
             <button
-              className={`group-chip ${selectedGroupId ? '' : 'active'}`}
-              onClick={() => setSelectedGroupId('')}
+              type="button"
+              className="group-ribbon-toggle"
+              onClick={() => setGroupRibbonExpanded((v) => !v)}
+              title={groupRibbonExpanded ? 'Collapse group list' : 'Expand group list'}
             >
-              All
+              {groupRibbonExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              <Layers size={16} />
+              <span>Groups</span>
             </button>
-            {groups.map((group) => (
-              <button
-                key={group.group_id}
-                className={`group-chip ${selectedGroupId === group.group_id ? 'active' : ''}`}
-                onClick={() => setSelectedGroupId(group.group_id)}
-              >
-                <span className="group-color-dot" style={{ background: group.color }} />
-                {group.name}
-                {selectedGroupId === group.group_id && (
-                  <span
-                    className="group-clear-btn"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setSelectedGroupId('');
-                    }}
+            {!groupRibbonExpanded && (
+              <span className="group-ribbon-summary">
+                {selectedGroupId
+                  ? groups.find((g) => g.group_id === selectedGroupId)?.name ?? 'Group'
+                  : 'All groups'}
+              </span>
+            )}
+            {groupRibbonExpanded && (
+              <>
+                <button
+                  className={`group-chip ${selectedGroupId ? '' : 'active'}`}
+                  onClick={() => setSelectedGroupId('')}
+                >
+                  All
+                </button>
+                {groups.map((group) => (
+                  <button
+                    key={group.group_id}
+                    className={`group-chip ${selectedGroupId === group.group_id ? 'active' : ''}`}
+                    onClick={() => setSelectedGroupId(group.group_id)}
                   >
-                    x
-                  </span>
-                )}
-              </button>
-            ))}
+                    <span className="group-color-dot" style={{ background: group.color }} />
+                    {group.name}
+                    {selectedGroupId === group.group_id && (
+                      <span
+                        className="group-clear-btn"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedGroupId('');
+                        }}
+                      >
+                        x
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         )}
 
-        <div className="entry-list-container">
+        <div className={`entry-list-container${section === 'dashboard' ? ' entry-list-container--flush' : ''}`}>
           {section === 'settings' ? (
             <SettingsView onShowToast={showToast} onLogout={executeLock} />
           ) : section === 'mini_vault' ? (
             <MiniVaultView onShowToast={showToast} onClose={() => setSection('all')} />
+          ) : section === 'dashboard' ? (
+            <DashboardView onRefreshVault={fetchAll} onOpenEntry={openInfoModal} />
           ) : section === 'tree' ? (
             <FolderTree
               entries={entries}
-              groups={groups}
-              onEditClick={openEditModal}
+              groups={treeDisplayGroups}
+              allGroups={groups}
               onInfoClick={openInfoModal}
               onDeleteGroup={handleDeleteGroup}
               onCreateGroup={handleCreateGroup}
+              onRenameGroup={(g) => setRenameGroup(g)}
+              onOpenMerge={() => setMergeModalOpen(true)}
             />
           ) : (
             <EntryTable
@@ -334,6 +486,22 @@ const VaultLayout: React.FC<VaultLayoutProps> = ({ onLocked }) => {
 
       {infoEntry && (
         <InfoModal entry={infoEntry} onClose={() => setInfoEntry(null)} />
+      )}
+
+      {mergeModalOpen && (
+        <MergeGroupsModal
+          groups={groups}
+          onClose={() => setMergeModalOpen(false)}
+          onMerge={(ids, name, color) => void handleMergeGroups(ids, name, color)}
+        />
+      )}
+
+      {renameGroup && (
+        <RenameGroupModal
+          group={renameGroup}
+          onClose={() => setRenameGroup(null)}
+          onSave={(name) => void handleRenameGroup(name)}
+        />
       )}
 
       {confirmAction && (

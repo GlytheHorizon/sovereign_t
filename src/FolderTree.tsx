@@ -1,17 +1,30 @@
 import React, { useState } from 'react';
 import { EntrySummary, GroupSummary } from './api';
-import { Folder, FolderOpen, ChevronRight, ChevronDown, FileText, Trash2 } from 'lucide-react';
+import { Folder, FolderOpen, ChevronRight, ChevronDown, FileText, Trash2, Pencil, GitMerge } from 'lucide-react';
 
 interface FolderTreeProps {
   entries: EntrySummary[];
+  /** Groups to render in the tree (may be filtered by search / ribbon). */
   groups: GroupSummary[];
-  onEditClick: (id: string) => void;
+  /** Full group list for merge dialog. */
+  allGroups: GroupSummary[];
   onInfoClick: (id: string) => void;
   onDeleteGroup: (id: string) => void;
   onCreateGroup: (name: string, color: string) => void;
+  onRenameGroup: (group: GroupSummary) => void;
+  onOpenMerge: () => void;
 }
 
-const FolderTree: React.FC<FolderTreeProps> = ({ entries, groups, onEditClick, onInfoClick, onDeleteGroup, onCreateGroup }) => {
+const FolderTree: React.FC<FolderTreeProps> = ({
+  entries,
+  groups,
+  allGroups,
+  onInfoClick,
+  onDeleteGroup,
+  onCreateGroup,
+  onRenameGroup,
+  onOpenMerge,
+}) => {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupColor, setNewGroupColor] = useState('#8A2BE2');
@@ -37,10 +50,13 @@ const FolderTree: React.FC<FolderTreeProps> = ({ entries, groups, onEditClick, o
 
   return (
     <div className="folder-tree-container">
-      <div className="tree-toolbar" style={{ display: 'flex', gap: '8px', marginBottom: '16px', alignItems: 'center' }}>
+      <div
+        className="tree-toolbar"
+        style={{ display: 'flex', gap: '8px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}
+      >
         <input
           className="form-input"
-          style={{ flex: 1, padding: '6px 12px', fontSize: '13px' }}
+          style={{ flex: '1 1 140px', padding: '6px 12px', fontSize: '13px', minWidth: 0 }}
           placeholder="New Group Name"
           value={newGroupName}
           onChange={(e) => setNewGroupName(e.target.value)}
@@ -65,6 +81,17 @@ const FolderTree: React.FC<FolderTreeProps> = ({ entries, groups, onEditClick, o
         >
           Create Group
         </button>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          style={{ padding: '6px 12px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          onClick={onOpenMerge}
+          disabled={allGroups.length < 2}
+          title={allGroups.length < 2 ? 'Need at least two groups' : 'Merge groups'}
+        >
+          <GitMerge size={14} />
+          Merge groups
+        </button>
       </div>
 
       {groups.map(group => {
@@ -83,10 +110,26 @@ const FolderTree: React.FC<FolderTreeProps> = ({ entries, groups, onEditClick, o
               </span>
               <span className="tree-group-name">{group.name}</span>
               <span className="tree-group-count">{groupEntries.length} items</span>
-              <button 
-                className="action-btn danger" 
+              <button
+                type="button"
+                className="action-btn"
                 style={{ marginLeft: 'auto', opacity: 0.7 }}
-                onClick={(e) => { e.stopPropagation(); onDeleteGroup(group.group_id); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRenameGroup(group);
+                }}
+                title="Rename group"
+              >
+                <Pencil size={14} />
+              </button>
+              <button
+                type="button"
+                className="action-btn danger"
+                style={{ opacity: 0.7 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteGroup(group.group_id);
+                }}
                 title="Delete Group"
               >
                 <Trash2 size={14} />

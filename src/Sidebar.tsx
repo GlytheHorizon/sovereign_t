@@ -1,7 +1,7 @@
 import React from 'react';
-import { Folder, Star, Trash2, Lock, Shield, Network } from 'lucide-react';
+import { Folder, Star, Trash2, Lock, Shield, Network, LayoutDashboard } from 'lucide-react';
 
-export type Section = 'all' | 'favorites' | 'tree' | 'trash' | 'settings' | 'mini_vault';
+export type Section = 'dashboard' | 'all' | 'favorites' | 'tree' | 'trash' | 'settings' | 'mini_vault';
 
 interface SidebarProps {
   section: Section;
@@ -11,6 +11,7 @@ interface SidebarProps {
 }
 
 const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
   { id: 'all', label: 'All Items', icon: <Folder size={18} /> },
   { id: 'tree', label: 'Folder Tree', icon: <Network size={18} /> },
   { id: 'favorites', label: 'Favorites', icon: <Star size={18} /> },
@@ -43,7 +44,9 @@ const Sidebar: React.FC<SidebarProps> = React.memo(({ section, onSectionChange, 
           >
             <span className="sidebar-link-icon">{item.icon}</span>
             {item.label}
-            {item.id !== 'tree' && <span className="sidebar-link-count">{counts[item.id as 'all' | 'favorites' | 'trash']}</span>}
+            {item.id !== 'tree' && item.id !== 'dashboard' && (
+              <span className="sidebar-link-count">{counts[item.id as 'all' | 'favorites' | 'trash']}</span>
+            )}
           </button>
         ))}
       </nav>

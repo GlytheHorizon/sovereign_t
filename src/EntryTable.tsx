@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { EntrySummary, GroupSummary, invoke } from './api';
-import { Star, Trash2, Copy, RefreshCcw, Shield, Plus, Edit2, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Star, Trash2, Copy, RefreshCcw, Shield, Plus, Edit2, Info, ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from 'lucide-react';
+import { displayUsername } from './entryDisplay';
 
 interface EntryTableProps {
   entries: EntrySummary[];
@@ -14,6 +15,42 @@ interface EntryTableProps {
   onInfoClick: (id: string) => void;
   showAllPasswords: boolean;
   groups: GroupSummary[];
+}
+
+type EntrySortKey = 'favorite' | 'title' | 'username' | 'password';
+type SortDir = 'asc' | 'desc';
+
+function SortTh({
+  label,
+  sortKey,
+  activeKey,
+  dir,
+  onSort,
+  width,
+  title: thTitle,
+}: {
+  label: React.ReactNode;
+  sortKey: EntrySortKey;
+  activeKey: EntrySortKey | null;
+  dir: SortDir;
+  onSort: (k: EntrySortKey) => void;
+  width?: number | string;
+  title?: string;
+}) {
+  const active = activeKey === sortKey;
+  return (
+    <th style={width !== undefined ? { width } : undefined}>
+      <button
+        type="button"
+        className="th-sort-btn"
+        title={thTitle}
+        onClick={() => onSort(sortKey)}
+      >
+        <span className="th-sort-label">{label}</span>
+        {active ? (dir === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />) : null}
+      </button>
+    </th>
+  );
 }
 
 const EntryTable: React.FC<EntryTableProps> = React.memo(({
@@ -30,12 +67,46 @@ const EntryTable: React.FC<EntryTableProps> = React.memo(({
   groups,
 }) => {
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, string>>({});
+  const [sortKey, setSortKey] = useState<EntrySortKey | null>('title');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
   const ITEMS_PER_PAGE = 8;
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [entries, section]);
+
+  const handleSort = (k: EntrySortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setSortKey(k);
+      setSortDir(k === 'favorite' ? 'desc' : 'asc');
+    }
+  };
+
+  const sortedEntries = useMemo(() => {
+    const arr = [...entries];
+    if (!sortKey) return arr;
+    const dir = sortDir === 'asc' ? 1 : -1;
+    arr.sort((a, b) => {
+      let c = 0;
+      if (sortKey === 'favorite') {
+        c = a.favorite === b.favorite ? 0 : a.favorite ? -1 : 1;
+      } else if (sortKey === 'title') {
+        c = a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+      } else if (sortKey === 'username') {
+        c = displayUsername(a.username).localeCompare(displayUsername(b.username), undefined, {
+          sensitivity: 'base',
+        });
+      } else if (sortKey === 'password') {
+        const pa = showAllPasswords ? visiblePasswords[a.entry_id] ?? '' : '';
+        const pb = showAllPasswords ? visiblePasswords[b.entry_id] ?? '' : '';
+        c = pa.localeCompare(pb) || a.entry_id.localeCompare(b.entry_id);
+      }
+      return c * dir;
+    });
+    return arr;
+  }, [entries, sortKey, sortDir, showAllPasswords, visiblePasswords]);
 
   const handleCopyPassword = async (entryId: string) => {
     try {
@@ -135,18 +206,45 @@ const EntryTable: React.FC<EntryTableProps> = React.memo(({
     );
   }
 
-  const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
-  const paginatedEntries = entries.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(sortedEntries.length / ITEMS_PER_PAGE);
+  const paginatedEntries = sortedEntries.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE,
+  );
 
   return (
     <>
     <table className="entry-table">
       <thead>
         <tr>
-          <th style={{ width: 36 }}></th>
-          <th>Title</th>
-          <th>Email / Username</th>
-          <th>Password / Phrase</th>
+          <SortTh
+            label={<Star size={14} />}
+            sortKey="favorite"
+            activeKey={sortKey}
+            dir={sortDir}
+            onSort={handleSort}
+            width={44}
+          />
+          <SortTh label="Title" sortKey="title" activeKey={sortKey} dir={sortDir} onSort={handleSort} />
+          <SortTh
+            label="Email / Username"
+            sortKey="username"
+            activeKey={sortKey}
+            dir={sortDir}
+            onSort={handleSort}
+          />
+          <SortTh
+            label="Password / Phrase"
+            sortKey="password"
+            activeKey={sortKey}
+            dir={sortDir}
+            onSort={handleSort}
+            title={
+              showAllPasswords
+                ? 'Sort by revealed password text'
+                : 'Turn on Show all passwords to sort by secret text'
+            }
+          />
           <th style={{ width: 140 }}>Actions</th>
         </tr>
       </thead>
@@ -154,7 +252,7 @@ const EntryTable: React.FC<EntryTableProps> = React.memo(({
         {paginatedEntries.map((entry) => {
           const match = entry.username.match(/^\$\$(google|apple|facebook|crypto)\$\$(.*)$/);
           const customType = match ? match[1] : null;
-          const displayUsername = match ? match[2] : entry.username;
+          const userDisp = displayUsername(entry.username);
           
           const group = groups.find(g => g.group_id === entry.group_id);
           const badgeStyle = group 
@@ -195,10 +293,10 @@ const EntryTable: React.FC<EntryTableProps> = React.memo(({
               <td>
                 <span
                   style={{ cursor: 'pointer' }}
-                  onClick={() => handleCopyUsername(displayUsername)}
+                  onClick={() => handleCopyUsername(userDisp)}
                   title="Click to copy"
                 >
-                  {displayUsername || '—'}
+                  {userDisp || '—'}
                 </span>
               </td>
 

@@ -207,14 +207,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onLogout }) =>
                 <Shield size={16} />
                 <div className="about-item-content">
                   <label>Version</label>
-                  <span>V4.0 Stable</span>
+                  <span>v4.5 Stable</span>
                 </div>
               </div>
               <div className="about-item-v2">
                 <Shield size={16} />
                 <div className="about-item-content">
                   <label>Build</label>
-                  <span style={{ fontSize: '10px' }}>0430261918PMS</span>
+                  <span style={{ fontSize: '10px' }}>0502261541PMS</span>
                 </div>
               </div>
               <div className="about-item-v2">

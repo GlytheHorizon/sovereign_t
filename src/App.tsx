@@ -4,40 +4,36 @@ import AuthScreen from './AuthScreen';
 
 const VaultLayout = lazy(() => import('./VaultLayout'));
 
+const isTauriWindow =
+  typeof window !== 'undefined' &&
+  !!(
+    (window as unknown as { __TAURI__?: { core?: { invoke?: unknown } } }).__TAURI__?.core?.invoke ||
+    (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ ||
+    (window as unknown as { __TAURI_IPC__?: unknown }).__TAURI_IPC__
+  );
+
 const App: React.FC = () => {
   const [unlocked, setUnlocked] = useState(false);
 
   useEffect(() => {
-    // Initialize fullscreen on first run
-    (async () => {
-      const appWindow = getCurrentWindow();
-      try {
-        await appWindow.setFullscreen(true);
-      } catch (err) {
-        console.error('Failed to set initial fullscreen:', err);
-      }
-    })();
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      const appWindow = getCurrentWindow();
-      if (e.key === 'F11') {
-        e.preventDefault();
+    if (!isTauriWindow) return undefined;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'F11') return;
+      e.preventDefault();
+      void (async () => {
         try {
-          const isFullscreen = await appWindow.isFullscreen();
-          await appWindow.setFullscreen(!isFullscreen);
+          const appWindow = getCurrentWindow();
+          const fs = await appWindow.isFullscreen();
+          await appWindow.setFullscreen(!fs);
         } catch (err) {
           console.error('Failed to toggle fullscreen:', err);
         }
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        try {
-          await appWindow.setFullscreen(false);
-        } catch (err) {
-          console.error('Failed to exit fullscreen:', err);
-        }
-      }
+      })();
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, []);
 
   return (
