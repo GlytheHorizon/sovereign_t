@@ -1,0 +1,1 @@
+{"main":{"identifier":"main","description":"IPC for the labeled main window: core APIs plus fullscreen toggle.","local":true,"windows":["main"],"permissions":["core:default","core:window:allow-set-fullscreen"]}}

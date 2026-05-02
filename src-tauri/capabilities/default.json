@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "IPC for the labeled main window: core APIs plus fullscreen toggle.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-fullscreen"
+  ]
+}

@@ -1,46 +1,112 @@
-# Getting Started with Create React App
+<div align="center">
+  <img src="frontend/public/stv2.png" width="120" alt="Sovereign-T Logo" />
+  <h1>Sovereign-T</h1>
+  <p><strong>A Premium, High-Security Digital Vault for the Modern Sovereign</strong></p>
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+  <p>
+    <img src="https://img.shields.io/badge/Version-4.5_Stable-cyan?style=for-the-badge" alt="Version" />
+    <img src="https://img.shields.io/badge/Platform-Windows-blue?style=for-the-badge&logo=windows" alt="Platform" />
+    <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" />
+  </p>
 
-## Available Scripts
+  <hr />
 
-In the project directory, you can run:
+  <h3>🚀 Instant Access</h3>
+  <p>Skip the setup and experience Sovereign-T immediately:</p>
+  <a href="release/Sovereign_T%20V4.5%20Stable.exe" style="text-decoration:none;">
+    <img src="https://img.shields.io/badge/DOWNLOAD-STABLE_EXE-00E5FF?style=for-the-badge&logo=rocket&logoColor=black" alt="Download Button" />
+  </a>
+  <p><small>Direct Download for Windows</small></p>
 
-### `npm start`
+  <hr />
+</div>
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+## 🛡️ About the Project
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+> [!IMPORTANT]
+> **Sovereign-T** is my **2nd Windows application** project. It represents a significant leap in my desktop development journey, focusing on robust encryption and a premium user experience.
+> 
+> *Note: This repository primarily highlights the **Frontend** architecture and UI/UX patterns, as the core Rust backend is highly extensive.*
 
-### `npm test`
+---
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## ✨ Key Features
 
-### `npm run build`
+| Feature | Description |
+| :--- | :--- |
+| **Sovereign Security** | AES-256-GCM encryption with Argon2 key derivation. Your data never leaves your device. |
+| **Modern UI/UX** | Stunning glassmorphism interface built with React, Tailwind CSS, and custom HSL palettes. |
+| **Advanced Grouping** | Categorize accounts with custom colors and a powerful **Group Merging** engine. |
+| **Security Dashboard** | Real-time health score, password strength analysis, and reuse detection. |
+| **Mini-Vault** | A focused, compact mode for lightning-fast credential access. |
+| **Smart Filtering** | Filter by email provider, username, or group with intelligent sorting. |
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+---
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## 🛠️ Built With
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+<div align="center">
+  <table>
+    <tr>
+      <td align="center" width="96">
+        <img src="https://skillicons.dev/icons?i=react" width="48" height="48" alt="React" />
+        <br />React
+      </td>
+      <td align="center" width="96">
+        <img src="https://skillicons.dev/icons?i=rust" width="48" height="48" alt="Rust" />
+        <br />Rust
+      </td>
+      <td align="center" width="96">
+        <img src="https://skillicons.dev/icons?i=ts" width="48" height="48" alt="TypeScript" />
+        <br />TypeScript
+      </td>
+      <td align="center" width="96">
+        <img src="https://skillicons.dev/icons?i=tailwind" width="48" height="48" alt="Tailwind" />
+        <br />Tailwind
+      </td>
+      <td align="center" width="96">
+        <img src="https://skillicons.dev/icons?i=vite" width="48" height="48" alt="Vite" />
+        <br />Vite
+      </td>
+      <td align="center" width="96">
+        <img src="https://skillicons.dev/icons?i=sqlite" width="48" height="48" alt="SQLite" />
+        <br />SQLite
+      </td>
+    </tr>
+  </table>
+</div>
 
-### `npm run eject`
+---
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+## 🏗️ Developer Setup
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### Prerequisites
+- **Node.js** (v18+)
+- **Rust** (Latest Stable)
+- **Tauri CLI** (`npm install -g @tauri-apps/cli`)
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+### Installation
+```bash
+# 1. Clone the repository
+git clone https://github.com/GlytheHorizon/sovereign_t.git
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+# 2. Enter directory
+cd sovereign_t/frontend
 
-## Learn More
+# 3. Install dependencies
+npm install
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+# 4. Launch in Dev Mode
+npm run dev
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+---
+
+## 📄 License & Credits
+
+- **License**: Licensed under the [MIT License](LICENSE).
+- **Author**: Created with ❤️ by **Jerwin Cruz (GlytheHorizon)**.
+
+<div align="center">
+  <p><i>Sovereign-T — Reclaiming your digital sovereignty, one password at a time.</i></p>
+</div>

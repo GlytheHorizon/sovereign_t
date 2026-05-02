@@ -1,0 +1,8 @@
+[env]
+OPENSSL_DIR = { value = "C:\\Users\\jerwi\\vcpkg\\installed\\x64-windows-static-md", relative = false }
+OPENSSL_STATIC = { value = "1", relative = false }
+# For static builds, we don't need DLLs in the PATH, but we keep this for consistency
+PATH = { value = "C:\\Users\\jerwi\\vcpkg\\installed\\x64-windows-static-md\\bin", relative = false, append = ";" }
+
+[build]
+target-dir = "C:\\Users\\jerwi\\Sovereigni-T-target"
