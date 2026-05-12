@@ -13,7 +13,7 @@
 
   <h3>🚀 Instant Access</h3>
   <p>Skip the setup and experience Sovereign-T immediately:</p>
-  <a href="release/Sovereign_T%20V4.5%20Stable.exe" style="text-decoration:none;">
+  <a href="https://github.com/GlytheHorizon/sovereign_t/tree/master/release" style="text-decoration:none;">
     <img src="https://img.shields.io/badge/DOWNLOAD-STABLE_EXE-00E5FF?style=for-the-badge&logo=rocket&logoColor=black" alt="Download Button" />
   </a>
   <p><small>Direct Download for Windows</small></p>
