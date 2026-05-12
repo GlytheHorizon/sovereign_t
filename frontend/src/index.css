@@ -1554,11 +1554,13 @@ textarea.form-input {
   text-align: center;
   display: block;
   cursor: pointer;
+  margin-top: 12px;
 }
 
 .auth-footer-session {
-  position: absolute;
-  bottom: 40px;
+  position: static;
+  margin-top: 16px;
+  justify-content: center;
   display: flex;
   align-items: center;
   gap: 8px;

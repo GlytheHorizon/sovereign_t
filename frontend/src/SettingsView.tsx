@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, Key, Info, User, CheckCircle2, XCircle, Eye, EyeOff, Cpu, Code, Zap, Download, Upload, FileJson, Lock } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 import { invoke } from './api';
 
 interface SettingsViewProps {
@@ -21,6 +22,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onLogout }) =>
   const [authPassword, setAuthPassword] = useState('');
   const [showAuthPassword, setShowAuthPassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
+
+  const [recoveryStep, setRecoveryStep] = useState<'confirm' | 'show' | null>(null);
+  const [recoveryPassword, setRecoveryPassword] = useState('');
+  const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
+  const [recoveryPhrase, setRecoveryPhrase] = useState('');
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryCopied, setRecoveryCopied] = useState(false);
+  const [showRecoveryDoneConfirm, setShowRecoveryDoneConfirm] = useState(false);
+  const [showRecoveryGenerateConfirm, setShowRecoveryGenerateConfirm] = useState(false);
 
   const closeAuthModal = () => {
     setShowAuthModal(null);
@@ -84,6 +94,79 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onLogout }) =>
     } finally {
       setAuthLoading(false);
     }
+  };
+
+  const openRecoveryModal = () => {
+    setRecoveryStep('confirm');
+    setRecoveryPassword('');
+    setShowRecoveryPassword(false);
+    setRecoveryPhrase('');
+    setRecoveryCopied(false);
+  };
+
+  const closeRecoveryModal = () => {
+    setRecoveryStep(null);
+    setRecoveryPassword('');
+    setShowRecoveryPassword(false);
+    setRecoveryPhrase('');
+    setRecoveryCopied(false);
+  };
+
+  const handleRotateRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryLoading(true);
+    try {
+      const res = await invoke<{ phrase: string }>('rotate_recovery_key', {
+        input: { password: recoveryPassword },
+      });
+      setRecoveryPhrase(res?.phrase || '');
+      setRecoveryStep('show');
+      setRecoveryPassword('');
+    } catch (err: any) {
+      const message =
+        typeof err === 'string' ? err : err?.message || err?.toString();
+      onShowToast(message || 'Failed to rotate recovery key.', 'error');
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
+
+  const requestGenerateRecovery = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoveryPassword.trim()) return;
+    setShowRecoveryGenerateConfirm(true);
+  };
+
+  const confirmGenerateRecovery = async () => {
+    setShowRecoveryGenerateConfirm(false);
+    await handleRotateRecovery(new Event('submit') as any);
+  };
+
+  const cancelGenerateRecovery = () => {
+    setShowRecoveryGenerateConfirm(false);
+  };
+
+  const handleCopyRecovery = async () => {
+    if (!recoveryPhrase) return;
+    try {
+      await invoke('copy_to_clipboard', { input: { text: recoveryPhrase, ttl_seconds: 15 } });
+      setRecoveryCopied(true);
+    } catch {
+      setRecoveryCopied(false);
+    }
+  };
+
+  const handleDoneRecovery = () => {
+    setShowRecoveryDoneConfirm(true);
+  };
+
+  const confirmDoneRecovery = () => {
+    setShowRecoveryDoneConfirm(false);
+    closeRecoveryModal();
+  };
+
+  const cancelDoneRecovery = () => {
+    setShowRecoveryDoneConfirm(false);
   };
 
   return (
@@ -182,6 +265,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onLogout }) =>
                   )}
                 </button>
               </form>
+
+              <div className="settings-info-box" style={{ marginTop: 16 }}>
+                <Key size={16} />
+                <span>Generate a new recovery key. It will be shown once.</span>
+              </div>
+              <button className="btn btn-ghost btn-full" onClick={openRecoveryModal}>
+                Regenerate Recovery Key
+              </button>
             </div>
           </div>
 
@@ -207,14 +298,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onLogout }) =>
                 <Shield size={16} />
                 <div className="about-item-content">
                   <label>Version</label>
-                  <span>v4.5 Stable</span>
+                  <span>v5.0 Stable</span>
                 </div>
               </div>
               <div className="about-item-v2">
                 <Shield size={16} />
                 <div className="about-item-content">
                   <label>Build</label>
-                  <span style={{ fontSize: '10px' }}>0502261541PMS</span>
+                  <span style={{ fontSize: '10px' }}>0513260153AMS</span>
                 </div>
               </div>
               <div className="about-item-v2">
@@ -342,6 +433,115 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onLogout }) =>
             </div>
           </div>
         </div>
+      )}
+
+      {recoveryStep && (
+        <div className="modal-overlay">
+          <div className="modal auth-modal">
+            <div className="modal-header">
+              <div className="auth-modal-header">
+                <Key size={20} className="accent-color" />
+                <h3 className="modal-title">Recovery Key</h3>
+              </div>
+              <button className="modal-close" onClick={closeRecoveryModal}>×</button>
+            </div>
+
+            {recoveryStep === 'confirm' && (
+              <div className="modal-body">
+                <p className="auth-modal-desc" style={{ marginBottom: 16 }}>
+                  Regenerating replaces your existing recovery key. Enter your master password
+                  to continue.
+                </p>
+                <form id="recovery-form" onSubmit={requestGenerateRecovery}>
+                  <div className="form-group">
+                    <label className="form-label">Master Password</label>
+                    <div className="form-input-wrapper">
+                      <input
+                        type={showRecoveryPassword ? "text" : "password"}
+                        className="form-input auth-input"
+                        value={recoveryPassword}
+                        onChange={(e) => setRecoveryPassword(e.target.value)}
+                        placeholder="Enter your master password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="form-input-btn"
+                        onClick={() => setShowRecoveryPassword(!showRecoveryPassword)}
+                      >
+                        {showRecoveryPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                </form>
+              </div>
+            )}
+
+            {recoveryStep === 'show' && (
+              <div className="modal-body">
+                <p className="auth-modal-desc">Save this recovery key now. It is shown once.</p>
+
+                  {recoveryLoading && (
+                    <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                      This may take a while. Please wait.
+                    </div>
+                  )}
+                <div className="form-group">
+                  <div className="form-input-wrapper">
+                    <input className="form-input auth-input" type="text" readOnly value={recoveryPhrase} />
+                  </div>
+                </div>
+                <button type="button" className="btn btn-primary" onClick={handleCopyRecovery}>
+                  {recoveryCopied ? 'Copied' : 'Copy Recovery Key'}
+                </button>
+              </div>
+            )}
+
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={closeRecoveryModal} disabled={recoveryLoading}>
+                Cancel
+              </button>
+              {recoveryStep === 'confirm' && (
+                <button
+                  type="submit"
+                  form="recovery-form"
+                  className="btn btn-primary"
+                  disabled={recoveryLoading || !recoveryPassword.trim()}
+                >
+                  {recoveryLoading ? <span className="spinner" /> : 'Generate Key'}
+                </button>
+              )}
+              {recoveryStep === 'show' && (
+                <button className="btn btn-primary" onClick={handleDoneRecovery}>
+                  Done
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRecoveryDoneConfirm && (
+        <ConfirmModal
+          title="Confirm Recovery Key"
+          message="Did you already copy the recovery key? It will not be shown again."
+          confirmText="I Copied It"
+          cancelText="Go Back"
+          onConfirm={confirmDoneRecovery}
+          onCancel={cancelDoneRecovery}
+        />
+      )}
+
+      {showRecoveryGenerateConfirm && (
+        <ConfirmModal
+          title="Generate New Recovery Key"
+          message="This will replace your existing recovery key. Do you want to continue?"
+          confirmText="Generate"
+          cancelText="Cancel"
+          onConfirm={confirmGenerateRecovery}
+          onCancel={cancelGenerateRecovery}
+        />
       )}
     </div>
   );

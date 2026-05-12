@@ -1,13 +1,15 @@
 use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
 use argon2::{Algorithm, Argon2, Params, Version};
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::OsRng, seq::SliceRandom, RngCore};
 use thiserror::Error;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 pub const SALT_LEN: usize = 16;
 pub const NONCE_LEN: usize = 12;
 pub const KEY_LEN: usize = 32;
+
+const RECOVERY_CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 #[derive(Debug, Error)]
 pub enum CryptoError {
@@ -29,6 +31,10 @@ pub struct SecretKey([u8; KEY_LEN]);
 impl SecretKey {
     pub fn as_bytes(&self) -> &[u8; KEY_LEN] {
         &self.0
+    }
+
+    pub fn from_bytes(bytes: [u8; KEY_LEN]) -> Self {
+        Self(bytes)
     }
 }
 
@@ -88,6 +94,40 @@ pub fn decrypt_field(
         .decrypt(Nonce::from_slice(nonce), payload)
         .map_err(|_| CryptoError::DecryptFailed)?;
     Ok(plaintext)
+}
+
+pub fn generate_recovery_code() -> String {
+    let mut rng = OsRng;
+    let mut parts: Vec<String> = Vec::with_capacity(5);
+    for _ in 0..5 {
+        let mut part = [0u8; 5];
+        for slot in part.iter_mut() {
+            *slot = *RECOVERY_CHARSET
+                .choose(&mut rng)
+                .unwrap_or(&b'X');
+        }
+        parts.push(String::from_utf8_lossy(&part).to_string());
+    }
+    parts.join("-")
+}
+
+pub fn hash_recovery_phrase(phrase: &str, salt: &[u8]) -> Result<Vec<u8>, CryptoError> {
+    if salt.len() != SALT_LEN {
+        return Err(CryptoError::InvalidSaltLength);
+    }
+
+    let params = argon2_params()?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut hash = vec![0u8; KEY_LEN];
+    argon2
+        .hash_password_into(phrase.as_bytes(), salt, &mut hash)
+        .map_err(|_| CryptoError::KdfFailed)?;
+    Ok(hash)
+}
+
+pub fn verify_recovery_phrase(phrase: &str, salt: &[u8], expected: &[u8]) -> Result<bool, CryptoError> {
+    let hash = hash_recovery_phrase(phrase, salt)?;
+    Ok(hash.as_slice() == expected)
 }
 
 pub fn aad_for_entry(entry_id: &str, field: &str) -> Vec<u8> {

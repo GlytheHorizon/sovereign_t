@@ -25,6 +25,10 @@ export interface DecryptedSecrets {
   notes: string;
 }
 
+export interface RecoveryKeyResponse {
+  phrase: string;
+}
+
 export interface NewEntryInput {
   title: string;
   username: string;
@@ -81,7 +85,13 @@ export async function invoke<T>(cmd: string, args: Record<string, any> = {}): Pr
         return true as any;
 
       case 'create_vault':
-        return undefined as any;
+        return { phrase: 'ABCD3-EF4GH-IJKLM-NPQR7-STUVW' } as any;
+
+      case 'rotate_recovery_key':
+        return { phrase: 'X9Y8Z-7W6V5-4U3T2-1SRQP-ONMLK' } as any;
+
+      case 'unlock_vault_with_recovery':
+        return { phrase: 'NEW1K-NEW2K-NEW3K-NEW4K-NEW5K' } as any;
 
       case 'unlock_vault':
         return undefined as any;

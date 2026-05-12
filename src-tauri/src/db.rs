@@ -397,6 +397,102 @@ impl VaultDb {
         Ok(results)
     }
 
+    pub fn list_all_mini_entry_secrets(&self, key: &SecretKey) -> Result<Vec<MiniEntryEncryptedSecrets>, DbError> {
+        let conn = self.open(key)?;
+        let mut stmt = conn.prepare(
+            "SELECT entry_id, password_nonce, password_ct, notes_nonce, notes_ct FROM mini_entries",
+        )?;
+        let mut rows = stmt.query([])?;
+        let mut results = Vec::new();
+
+        while let Some(row) = rows.next()? {
+            let entry_id: String = row.get(0)?;
+            let pw_nonce_vec: Vec<u8> = row.get(1)?;
+            let pw_nonce = nonce_from_vec(pw_nonce_vec)?;
+            let pw_ct: Vec<u8> = row.get(2)?;
+            let n_nonce: Option<Vec<u8>> = row.get(3)?;
+            let n_ct: Option<Vec<u8>> = row.get(4)?;
+
+            let notes = match (n_nonce, n_ct) {
+                (Some(nonce_vec), Some(ct)) => Some(EncryptedField {
+                    nonce: nonce_from_vec(nonce_vec)?,
+                    ciphertext: ct,
+                }),
+                (None, None) => None,
+                _ => return Err(DbError::InvalidNonce),
+            };
+
+            results.push(MiniEntryEncryptedSecrets {
+                entry_id,
+                password: EncryptedField {
+                    nonce: pw_nonce,
+                    ciphertext: pw_ct,
+                },
+                notes,
+            });
+        }
+
+        Ok(results)
+    }
+
+    pub fn update_mini_entry_secrets(
+        &self,
+        key: &SecretKey,
+        entry_id: &str,
+        password: &EncryptedField,
+        notes: Option<&EncryptedField>,
+    ) -> Result<(), DbError> {
+        let conn = self.open(key)?;
+        conn.execute(
+            "UPDATE mini_entries SET password_nonce = ?1, password_ct = ?2, notes_nonce = ?3, notes_ct = ?4 WHERE entry_id = ?5",
+            params![
+                password.nonce.to_vec(),
+                password.ciphertext,
+                notes.map(|n| n.nonce.to_vec()),
+                notes.map(|n| n.ciphertext.clone()),
+                entry_id,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_all_mini_notes_encrypted(&self, key: &SecretKey) -> Result<Vec<MiniNoteEncryptedRecord>, DbError> {
+        let conn = self.open(key)?;
+        let mut stmt = conn.prepare(
+            "SELECT id, content_nonce, content_ct FROM mini_notes",
+        )?;
+        let mut rows = stmt.query([])?;
+        let mut results = Vec::new();
+
+        while let Some(row) = rows.next()? {
+            let nonce_vec: Vec<u8> = row.get(1)?;
+            let nonce = nonce_from_vec(nonce_vec)?;
+            results.push(MiniNoteEncryptedRecord {
+                id: row.get(0)?,
+                content: EncryptedField {
+                    nonce,
+                    ciphertext: row.get(2)?,
+                },
+            });
+        }
+
+        Ok(results)
+    }
+
+    pub fn update_mini_note_content(
+        &self,
+        key: &SecretKey,
+        id: i64,
+        content: &EncryptedField,
+    ) -> Result<(), DbError> {
+        let conn = self.open(key)?;
+        conn.execute(
+            "UPDATE mini_notes SET content_nonce = ?1, content_ct = ?2 WHERE id = ?3",
+            params![content.nonce.to_vec(), content.ciphertext, id],
+        )?;
+        Ok(())
+    }
+
     pub fn update_entry_secrets(&self, key: &SecretKey, entry_id: &str, secrets: &EncryptedSecrets) -> Result<(), DbError> {
         let conn = self.open(key)?;
         conn.execute(
@@ -607,6 +703,14 @@ impl VaultDb {
             "INSERT OR REPLACE INTO mini_vault_config (key, value) VALUES (?1, ?2)",
             params![config_key, value],
         )?;
+        Ok(())
+    }
+
+    pub fn clear_mini_vault(&self, key: &SecretKey) -> Result<(), DbError> {
+        let conn = self.open(key)?;
+        conn.execute("DELETE FROM mini_entries", [])?;
+        conn.execute("DELETE FROM mini_notes", [])?;
+        conn.execute("DELETE FROM mini_vault_config", [])?;
         Ok(())
     }
 
@@ -866,6 +970,17 @@ pub struct NewMiniNoteEncrypted {
     pub content: EncryptedField,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+pub struct MiniEntryEncryptedSecrets {
+    pub entry_id: String,
+    pub password: EncryptedField,
+    pub notes: Option<EncryptedField>,
+}
+
+pub struct MiniNoteEncryptedRecord {
+    pub id: i64,
+    pub content: EncryptedField,
 }
 
 #[derive(Debug, Serialize)]

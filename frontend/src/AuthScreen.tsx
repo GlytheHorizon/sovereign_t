@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { invoke } from './api';
 import { Shield, Eye, EyeOff, Lock, Unlock, AlertTriangle, Key, ArrowRight, X } from 'lucide-react';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import ConfirmModal from './ConfirmModal';
 
 interface AuthScreenProps {
@@ -16,6 +15,12 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
+  const [recoveryPhrase, setRecoveryPhrase] = useState<string | null>(null);
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [recoveryCopied, setRecoveryCopied] = useState(false);
+  const [showRecoveryConfirm, setShowRecoveryConfirm] = useState(false);
+  const [showRecoveryInput, setShowRecoveryInput] = useState(false);
+  const [recoveryInput, setRecoveryInput] = useState('');
 
 
   const checkVault = async () => {
@@ -35,7 +40,8 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
     e.preventDefault();
     setError('');
 
-    if (password.length < 12) {
+    const hasRecovery = recoveryInput.trim().length > 0;
+    if ((mode === 'create' || !hasRecovery) && password.length < 12) {
       setError('Master password must be at least 12 characters.');
       return;
     }
@@ -47,13 +53,28 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
 
     setLoading(true);
     try {
+      let pendingRecovery: string | null = null;
       if (mode === 'create') {
-        await invoke('create_vault', { input: { password } });
+        const res = await invoke<{ phrase: string }>('create_vault', { input: { password } });
+        pendingRecovery = res?.phrase || null;
+        if (pendingRecovery) {
+          setRecoveryPhrase(pendingRecovery);
+        }
       } else {
-        await invoke('unlock_vault', { input: { password } });
+        const recoveryValue = recoveryInput.trim();
+        if (recoveryValue) {
+          const res = await invoke<{ phrase: string }>('unlock_vault_with_recovery', { input: { recoveryKey: recoveryValue } });
+          pendingRecovery = res?.phrase || null;
+          if (pendingRecovery) {
+            setRecoveryPhrase(pendingRecovery);
+          }
+        } else {
+          await invoke('unlock_vault', { input: { password } });
+        }
       }
       setPassword('');
       setConfirmPassword('');
+      setRecoveryInput('');
       
       // Speed up progress timer for faster login feel
       let p = 0;
@@ -63,7 +84,11 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
         if (p >= 100) {
           clearInterval(interval);
           setLoading(false);
-          onUnlocked();
+          if (pendingRecovery) {
+            setShowRecoveryModal(true);
+          } else {
+            onUnlocked();
+          }
         }
       }, 20);
     } catch (e: any) {
@@ -81,6 +106,32 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
       </div>
     );
   }
+
+  const handleCopyRecovery = async () => {
+    if (!recoveryPhrase) return;
+    try {
+      await invoke('copy_to_clipboard', { input: { text: recoveryPhrase, ttl_seconds: 15 } });
+      setRecoveryCopied(true);
+    } catch {
+      setRecoveryCopied(false);
+    }
+  };
+
+  const requestFinalizeRecovery = () => {
+    setShowRecoveryConfirm(true);
+  };
+
+  const finalizeRecovery = () => {
+    setShowRecoveryConfirm(false);
+    setShowRecoveryModal(false);
+    setRecoveryPhrase(null);
+    setRecoveryCopied(false);
+    onUnlocked();
+  };
+
+  const cancelFinalizeRecovery = () => {
+    setShowRecoveryConfirm(false);
+  };
 
   return (
     <div className="auth-screen">
@@ -167,13 +218,90 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
             )}
           </button>
 
-          <span className="auth-recovery-link">Initiate Recovery Protocol?</span>
+          <span
+            className="auth-recovery-link"
+            onClick={() => setShowRecoveryInput(!showRecoveryInput)}
+            role="button"
+          >
+            Initiate Recovery Protocol?
+          </span>
+
+          {showRecoveryInput && (
+            <div style={{ marginTop: 16 }}>
+              <label className="auth-label-polished">Recovery Key</label>
+              <div className="auth-input-wrapper-polished">
+                <span className="auth-input-icon-left"><Key size={18} /></span>
+                <input
+                  className="auth-input-polished"
+                  type="text"
+                  placeholder="Enter recovery key (XXXXX-XXXXX-XXXXX-XXXXX-XXXXX)"
+                  value={recoveryInput}
+                  onChange={(e) => setRecoveryInput(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+          )}
         </form>
+        <div className="auth-footer-session">
+          <Lock size={12} /> End-to-end Encrypted Session
+        </div>
       </div>
 
-      <div className="auth-footer-session">
-        <Lock size={12} /> End-to-end Encrypted Session
-      </div>
+      {showRecoveryModal && recoveryPhrase && (
+        <div className="modal-overlay">
+          <div className="modal auth-modal">
+            <div className="modal-header">
+              <div className="auth-modal-header">
+                <Shield size={20} className="accent-color" />
+                <h3 className="modal-title">Recovery Key</h3>
+              </div>
+              <button
+                className="modal-close"
+                onClick={requestFinalizeRecovery}
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="auth-modal-desc">
+                Save this recovery key now. It is shown only once.
+              </p>
+              <div className="auth-input-wrapper-polished" style={{ marginBottom: 12 }}>
+                <input
+                  className="auth-input-polished"
+                  type="text"
+                  readOnly
+                  value={recoveryPhrase}
+                />
+              </div>
+              <button type="button" className="btn btn-primary" onClick={handleCopyRecovery}>
+                {recoveryCopied ? 'Copied' : 'Copy Recovery Key'}
+              </button>
+
+            </div>
+            <div className="modal-footer">
+              <button
+                className="btn btn-primary"
+                onClick={requestFinalizeRecovery}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRecoveryConfirm && (
+        <ConfirmModal
+          title="Confirm Recovery Key"
+          message="Did you already copy the recovery key? It will not be shown again."
+          confirmText="I Copied It"
+          cancelText="Go Back"
+          onConfirm={finalizeRecovery}
+          onCancel={cancelFinalizeRecovery}
+        />
+      )}
     </div>
   );
 };

@@ -3,9 +3,10 @@
 mod crypto;
 mod db;
 
-use crate::crypto::{aad_for_entry, derive_master_key, encrypt_field, generate_salt, SecretKey, SALT_LEN};
+use crate::crypto::{aad_for_entry, derive_master_key, encrypt_field, generate_salt, SecretKey, SALT_LEN, NONCE_LEN};
 use crate::db::{EncryptedSecrets, EntryFilter, EntrySummary, GroupSummary, NewEntryEncrypted, NewGroup, UpdateEntryEncrypted, VaultDb};
 use arboard::Clipboard;
+use chrono::Local;
 use rand::{rngs::OsRng, seq::SliceRandom};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -72,6 +73,12 @@ impl From<arboard::Error> for AppError {
     }
 }
 
+impl From<serde_json::Error> for AppError {
+    fn from(_: serde_json::Error) -> Self {
+        AppError::new("json_error", "Recovery data serialization failed.")
+    }
+}
+
 type CommandResult<T> = Result<T, AppError>;
 
 struct AppState {
@@ -79,6 +86,7 @@ struct AppState {
     active_vault: Mutex<String>,
     db: Mutex<VaultDb>,
     salt_path: Mutex<PathBuf>,
+    recovery_path: Mutex<PathBuf>,
     session: Mutex<Option<Session>>,
     mini_vault_unlocked: Mutex<bool>,
 }
@@ -114,15 +122,39 @@ struct CreateVaultInput {
     password: String,
 }
 
+#[derive(Debug, Serialize)]
+struct RecoveryKeyResponse {
+    phrase: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct RecoveryData {
+    salt: String,
+    hash: String,
+    wrap_nonce: String,
+    wrap_ct: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct UnlockVaultInput {
     password: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UnlockVaultWithRecoveryInput {
+    recovery_key: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct ChangeMasterPasswordInput {
     old_password: String,
     new_password: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct RotateRecoveryKeyInput {
+    password: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -273,12 +305,10 @@ async fn export_vault(state: State<'_, AppState>, password: String) -> CommandRe
     let key = derive_master_key(&password, &salt)?;
     state.db.lock().unwrap().verify_key(&key)?;
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    
-    let default_name = format!("{}.toaa", now);
+    let default_name = format!(
+        "{}.toaa",
+        Local::now().format("%I-%M-%p-%m-%d-%Y")
+    );
 
     let path = rfd::AsyncFileDialog::new()
         .set_file_name(&default_name)
@@ -530,9 +560,10 @@ fn vault_exists(state: State<AppState>) -> bool {
 }
 
 #[tauri::command]
-fn create_vault(state: State<AppState>, input: CreateVaultInput) -> CommandResult<()> {
+fn create_vault(state: State<AppState>, input: CreateVaultInput) -> CommandResult<RecoveryKeyResponse> {
     let db = state.db.lock().map_err(|_| AppError::new("state_error", ""))?;
     let salt_path = state.salt_path.lock().map_err(|_| AppError::new("state_error", ""))?;
+    let recovery_path = state.recovery_path.lock().map_err(|_| AppError::new("state_error", ""))?;
 
     if db.path().exists() || salt_path.exists() {
         return Err(AppError::new("vault_exists", "Vault already exists."));
@@ -559,11 +590,28 @@ fn create_vault(state: State<AppState>, input: CreateVaultInput) -> CommandResul
     let now = now_epoch();
     let _ = db.log_event(&key, "vault_created", "vault", now);
 
+    let recovery_code = crypto::generate_recovery_code();
+    let recovery_normalized = normalize_recovery_key(&recovery_code);
+    let recovery_salt = generate_salt();
+    let recovery_hash = crypto::hash_recovery_phrase(&recovery_normalized, &recovery_salt)?;
+    let recovery_key = key_from_recovery_hash(&recovery_hash)?;
+    let wrap = crypto::encrypt_field(key.as_bytes(), &recovery_key, b"recovery_wrap")?;
+
+    let recovery_data = RecoveryData {
+        salt: hex::encode(recovery_salt),
+        hash: hex::encode(recovery_hash),
+        wrap_nonce: hex::encode(wrap.nonce),
+        wrap_ct: hex::encode(wrap.ciphertext),
+    };
+    fs::write(&*recovery_path, serde_json::to_vec(&recovery_data)?)?;
+
     let mut guard = state.session.lock().map_err(|_| {
         AppError::new("state_error", "Session state is unavailable.")
     })?;
     *guard = Some(Session::new(key));
-    Ok(())
+    Ok(RecoveryKeyResponse {
+        phrase: recovery_code,
+    })
 }
 
 #[tauri::command]
@@ -599,6 +647,74 @@ fn unlock_vault(state: State<AppState>, input: UnlockVaultInput) -> CommandResul
 }
 
 #[tauri::command]
+fn unlock_vault_with_recovery(
+    state: State<AppState>,
+    input: UnlockVaultWithRecoveryInput,
+) -> CommandResult<RecoveryKeyResponse> {
+    let db = state.db.lock().map_err(|_| AppError::new("state_error", ""))?;
+    let recovery_path = state.recovery_path.lock().map_err(|_| AppError::new("state_error", ""))?;
+
+    let recovery_key_input = normalize_recovery_key(&input.recovery_key);
+    validate_len("recovery_key", &recovery_key_input, 10, 64)?;
+
+    let recovery_bytes = fs::read(&*recovery_path)
+        .map_err(|_| AppError::new("recovery_missing", "Recovery key is not configured."))?;
+    let recovery_data: RecoveryData = serde_json::from_slice(&recovery_bytes)
+        .map_err(|_| AppError::new("recovery_invalid", "Recovery key data invalid."))?;
+
+    let recovery_salt = hex::decode(recovery_data.salt)
+        .map_err(|_| AppError::new("recovery_invalid", "Recovery key data invalid."))?;
+    let expected_hash = hex::decode(recovery_data.hash)
+        .map_err(|_| AppError::new("recovery_invalid", "Recovery key data invalid."))?;
+
+    let ok = crypto::verify_recovery_phrase(&recovery_key_input, &recovery_salt, &expected_hash)?;
+    if !ok {
+        return Err(AppError::new("recovery_invalid", "Recovery key is invalid."));
+    }
+
+    let recovery_key = key_from_recovery_hash(&expected_hash)?;
+    let wrap_nonce = decode_nonce_hex(&recovery_data.wrap_nonce)?;
+    let wrap_ct = hex::decode(recovery_data.wrap_ct)
+        .map_err(|_| AppError::new("recovery_invalid", "Recovery key data invalid."))?;
+    let plain_key = crypto::decrypt_field(&wrap_nonce, &wrap_ct, &recovery_key, b"recovery_wrap")?;
+
+    if plain_key.len() != crypto::KEY_LEN {
+        return Err(AppError::new("recovery_invalid", "Recovery key data invalid."));
+    }
+
+    let mut key_bytes = [0u8; crypto::KEY_LEN];
+    key_bytes.copy_from_slice(&plain_key);
+    let master_key = SecretKey::from_bytes(key_bytes);
+    db.verify_key(&master_key)?;
+
+    let now = now_epoch();
+    let _ = db.log_event(&master_key, "vault_unlocked", "vault", now);
+
+    let recovery_code = crypto::generate_recovery_code();
+    let recovery_normalized = normalize_recovery_key(&recovery_code);
+    let recovery_salt = generate_salt();
+    let recovery_hash = crypto::hash_recovery_phrase(&recovery_normalized, &recovery_salt)?;
+    let recovery_key = key_from_recovery_hash(&recovery_hash)?;
+    let wrap = crypto::encrypt_field(master_key.as_bytes(), &recovery_key, b"recovery_wrap")?;
+
+    let recovery_data = RecoveryData {
+        salt: hex::encode(recovery_salt),
+        hash: hex::encode(recovery_hash),
+        wrap_nonce: hex::encode(wrap.nonce),
+        wrap_ct: hex::encode(wrap.ciphertext),
+    };
+    fs::write(&*recovery_path, serde_json::to_vec(&recovery_data)?)?;
+
+    let mut guard = state.session.lock().map_err(|_| {
+        AppError::new("state_error", "Session state is unavailable.")
+    })?;
+    *guard = Some(Session::new(master_key));
+    Ok(RecoveryKeyResponse {
+        phrase: recovery_code,
+    })
+}
+
+#[tauri::command]
 fn change_master_password(state: State<AppState>, input: ChangeMasterPasswordInput) -> CommandResult<()> {
     let db = state.db.lock().map_err(|_| AppError::new("state_error", ""))?;
     let salt_path = state.salt_path.lock().map_err(|_| AppError::new("state_error", ""))?;
@@ -631,6 +747,58 @@ fn change_master_password(state: State<AppState>, input: ChangeMasterPasswordInp
         })?;
     }
 
+    // 3b. Re-encrypt all mini entries
+    let mini_entries = db.list_all_mini_entry_secrets(&old_key)?;
+    for entry in mini_entries {
+        let pw_plain = crypto::decrypt_field(
+            &entry.password.nonce,
+            &entry.password.ciphertext,
+            &old_key,
+            &aad_for_entry(&entry.entry_id, "password"),
+        )?;
+
+        let pw_new = crypto::encrypt_field(
+            &pw_plain,
+            &new_key,
+            &aad_for_entry(&entry.entry_id, "password"),
+        )?;
+
+        let notes_new = if let Some(notes) = entry.notes {
+            if notes.ciphertext.is_empty() {
+                None
+            } else {
+                let notes_plain = crypto::decrypt_field(
+                    &notes.nonce,
+                    &notes.ciphertext,
+                    &old_key,
+                    &aad_for_entry(&entry.entry_id, "notes"),
+                )?;
+                Some(crypto::encrypt_field(
+                    &notes_plain,
+                    &new_key,
+                    &aad_for_entry(&entry.entry_id, "notes"),
+                )?)
+            }
+        } else {
+            None
+        };
+
+        db.update_mini_entry_secrets(&old_key, &entry.entry_id, &pw_new, notes_new.as_ref())?;
+    }
+
+    // 3c. Re-encrypt all mini notes
+    let mini_notes = db.list_all_mini_notes_encrypted(&old_key)?;
+    for note in mini_notes {
+        let content_plain = crypto::decrypt_field(
+            &note.content.nonce,
+            &note.content.ciphertext,
+            &old_key,
+            b"mini_note",
+        )?;
+        let content_new = crypto::encrypt_field(&content_plain, &new_key, b"mini_note")?;
+        db.update_mini_note_content(&old_key, note.id, &content_new)?;
+    }
+
     // 4. Rekey the database
     db.rekey_database(&old_key, &new_key)?;
 
@@ -642,6 +810,49 @@ fn change_master_password(state: State<AppState>, input: ChangeMasterPasswordInp
     *guard = Some(Session::new(new_key));
 
     Ok(())
+}
+
+#[tauri::command]
+fn rotate_recovery_key(state: State<AppState>, input: RotateRecoveryKeyInput) -> CommandResult<RecoveryKeyResponse> {
+    let db = state.db.lock().map_err(|_| AppError::new("state_error", ""))?;
+    let salt_path = state.salt_path.lock().map_err(|_| AppError::new("state_error", ""))?;
+    let recovery_path = state.recovery_path.lock().map_err(|_| AppError::new("state_error", ""))?;
+
+    validate_len(
+        "master_password",
+        &input.password,
+        MASTER_PASSWORD_MIN,
+        MASTER_PASSWORD_MAX,
+    )?;
+
+    let salt = fs::read(&*salt_path)?;
+    if salt.len() != SALT_LEN {
+        return Err(AppError::new("salt_error", "Vault salt is invalid."));
+    }
+
+    let mut password = input.password;
+    let key = derive_master_key(&password, &salt)?;
+    password.zeroize();
+    db.verify_key(&key)?;
+
+    let recovery_code = crypto::generate_recovery_code();
+    let recovery_normalized = normalize_recovery_key(&recovery_code);
+    let recovery_salt = generate_salt();
+    let recovery_hash = crypto::hash_recovery_phrase(&recovery_normalized, &recovery_salt)?;
+    let recovery_key = key_from_recovery_hash(&recovery_hash)?;
+    let wrap = crypto::encrypt_field(key.as_bytes(), &recovery_key, b"recovery_wrap")?;
+
+    let recovery_data = RecoveryData {
+        salt: hex::encode(recovery_salt),
+        hash: hex::encode(recovery_hash),
+        wrap_nonce: hex::encode(wrap.nonce),
+        wrap_ct: hex::encode(wrap.ciphertext),
+    };
+    fs::write(&*recovery_path, serde_json::to_vec(&recovery_data)?)?;
+
+    Ok(RecoveryKeyResponse {
+        phrase: recovery_code,
+    })
 }
 
 #[tauri::command]
@@ -1374,6 +1585,30 @@ fn validate_len(_field: &str, value: &str, min: usize, max: usize) -> CommandRes
     Ok(())
 }
 
+fn normalize_recovery_key(value: &str) -> String {
+    value.trim().to_ascii_uppercase()
+}
+
+fn decode_nonce_hex(value: &str) -> CommandResult<[u8; NONCE_LEN]> {
+    let bytes = hex::decode(value)
+        .map_err(|_| AppError::new("recovery_invalid", "Recovery key data invalid."))?;
+    if bytes.len() != NONCE_LEN {
+        return Err(AppError::new("recovery_invalid", "Recovery key data invalid."));
+    }
+    let mut nonce = [0u8; NONCE_LEN];
+    nonce.copy_from_slice(&bytes);
+    Ok(nonce)
+}
+
+fn key_from_recovery_hash(hash: &[u8]) -> CommandResult<SecretKey> {
+    if hash.len() != crypto::KEY_LEN {
+        return Err(AppError::new("recovery_invalid", "Recovery key data invalid."));
+    }
+    let mut bytes = [0u8; crypto::KEY_LEN];
+    bytes.copy_from_slice(hash);
+    Ok(SecretKey::from_bytes(bytes))
+}
+
 fn now_epoch() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1651,6 +1886,19 @@ fn delete_mini_note(state: State<AppState>, id: i64) -> CommandResult<()> {
 }
 
 #[tauri::command]
+fn clear_mini_vault(state: State<AppState>) -> CommandResult<()> {
+    let session_guard = state.session.lock().map_err(|_| AppError::new("state_error", ""))?;
+    let session = session_guard.as_ref().ok_or_else(|| AppError::new("locked", "Vault is locked."))?;
+    if !*state.mini_vault_unlocked.lock().unwrap() {
+        return Err(AppError::new("mini_locked", "Mini vault is locked."));
+    }
+    let db = state.db.lock().map_err(|_| AppError::new("state_error", ""))?;
+    db.clear_mini_vault(&session.key)?;
+    *state.mini_vault_unlocked.lock().unwrap() = false;
+    Ok(())
+}
+
+#[tauri::command]
 fn get_mini_entry_secrets(state: State<AppState>, entry_id: String) -> CommandResult<DecryptedSecrets> {
     println!("Backend: Fetching secrets for mini entry: {}", entry_id);
     let session_guard = state.session.lock().map_err(|_| AppError::new("state_error", ""))?;
@@ -1731,12 +1979,14 @@ fn main() {
             let active_vault = "vault".to_string();
             let db_path = app_data_dir.join(format!("{}.db", active_vault));
             let salt_path = app_data_dir.join(format!("{}.salt", active_vault));
+            let recovery_path = app_data_dir.join(format!("{}.recovery", active_vault));
 
             app.manage(AppState {
                 app_data_dir,
                 active_vault: Mutex::new(active_vault),
                 db: Mutex::new(VaultDb::new(db_path)),
                 salt_path: Mutex::new(salt_path),
+                recovery_path: Mutex::new(recovery_path),
                 session: Mutex::new(None),
                 mini_vault_unlocked: Mutex::new(false),
             });
@@ -1761,6 +2011,7 @@ fn main() {
             vault_exists,
             create_vault,
             unlock_vault,
+            unlock_vault_with_recovery,
             lock_vault,
             set_autolock,
             list_entries,
@@ -1781,6 +2032,7 @@ fn main() {
             generate_password,
             copy_to_clipboard,
             change_master_password,
+            rotate_recovery_key,
             get_mini_vault_status,
             setup_mini_vault,
             unlock_mini_vault,
@@ -1791,6 +2043,7 @@ fn main() {
             list_mini_notes,
             add_mini_note,
             delete_mini_note,
+            clear_mini_vault,
             get_mini_entry_password,
             get_mini_entry_secrets,
             get_mini_note_content,

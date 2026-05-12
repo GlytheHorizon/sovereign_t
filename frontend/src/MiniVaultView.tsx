@@ -30,8 +30,8 @@ const MiniVaultView: React.FC<MiniVaultViewProps> = ({ onShowToast, onClose }) =
 
   // Lock confirmation
   const [showLockConfirm, setShowLockConfirm] = useState(false);
-
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'entry' | 'note', id: any, title: string } | null>(null);
+
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [editingNote, setEditingNote] = useState<any | null>(null);
   const [showNoteContent, setShowNoteContent] = useState<any | null>(null);
@@ -40,6 +40,7 @@ const MiniVaultView: React.FC<MiniVaultViewProps> = ({ onShowToast, onClose }) =
   const [changePinData, setChangePinData] = useState({ currentPin: '', newPin: '', confirmPin: '' });
   const [confirmPinChange, setConfirmPinChange] = useState(false);
   const [showPinFields, setShowPinFields] = useState({ current: false, new: false, confirm: false });
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
 
   const fetchStatus = useCallback(async () => {
@@ -131,6 +132,41 @@ const MiniVaultView: React.FC<MiniVaultViewProps> = ({ onShowToast, onClose }) =
     }
   };
 
+  const executeDelete = async () => {
+    if (!confirmDelete) return;
+    try {
+      if (confirmDelete.type === 'entry') {
+        await invoke('delete_mini_entry', { entryId: confirmDelete.id });
+        onShowToast('Account deleted', 'success');
+        setInfoEntry(null);
+      } else {
+        await invoke('delete_mini_note', { id: confirmDelete.id });
+        onShowToast('Note deleted', 'success');
+        if (showNoteContent?.id === confirmDelete.id) setShowNoteContent(null);
+      }
+      setConfirmDelete(null);
+      fetchData();
+    } catch (e: any) {
+      onShowToast(e?.message || 'Deletion failed', 'error');
+    }
+  };
+
+  const handleClearMiniVault = async () => {
+    try {
+      await invoke('clear_mini_vault');
+      setEntries([]);
+      setNotes([]);
+      setIsUnlocked(false);
+      setIsSetup(false);
+      setPin('');
+      setShowClearConfirm(false);
+      onShowToast('Mini vault reset. Please set up a new PIN.', 'success');
+    } catch (e: any) {
+      const msg = typeof e === 'string' ? e : e?.message || 'Failed to clear mini vault';
+      onShowToast(msg, 'error');
+    }
+  };
+
   const handleKeyPress = (num: string) => {
     if (pin.length < 8) setPin(pin + num);
   };
@@ -219,24 +255,6 @@ const MiniVaultView: React.FC<MiniVaultViewProps> = ({ onShowToast, onClose }) =
     }
   };
 
-  const executeDelete = async () => {
-    if (!confirmDelete) return;
-    try {
-      if (confirmDelete.type === 'entry') {
-        await invoke('delete_mini_entry', { entryId: confirmDelete.id });
-        onShowToast('Account deleted', 'success');
-        setInfoEntry(null);
-      } else {
-        await invoke('delete_mini_note', { id: confirmDelete.id });
-        onShowToast('Note deleted', 'success');
-        if (showNoteContent?.id === confirmDelete.id) setShowNoteContent(null);
-      }
-      setConfirmDelete(null);
-      fetchData();
-    } catch (e: any) {
-      onShowToast(e?.message || 'Deletion failed', 'error');
-    }
-  };
 
   const handleShowInfo = async (entry: any) => {
     try {
@@ -563,6 +581,18 @@ const MiniVaultView: React.FC<MiniVaultViewProps> = ({ onShowToast, onClose }) =
         </div>
       )}
 
+      {showClearConfirm && (
+        <ConfirmModal
+          title="Reset Mini Vault"
+          message="This will delete all Mini Vault accounts, notes, and PIN. This action cannot be undone."
+          confirmText="Reset"
+          cancelText="Cancel"
+          danger
+          onConfirm={handleClearMiniVault}
+          onCancel={() => setShowClearConfirm(false)}
+        />
+      )}
+
       {/* Account Info Modal (Updated to match InfoModal.tsx) */}
       {infoEntry && (
         <div className="modal-overlay" onClick={() => setInfoEntry(null)} style={{ zIndex: 150 }}>
@@ -727,17 +757,6 @@ const MiniVaultView: React.FC<MiniVaultViewProps> = ({ onShowToast, onClose }) =
       )}
 
       {/* Confirmation Modals */}
-      {confirmDelete && (
-        <ConfirmModal
-          title={`Delete ${confirmDelete.type === 'entry' ? 'Account' : 'Note'}`}
-          message={`Are you sure you want to delete "${confirmDelete.title}"? This action cannot be undone.`}
-          confirmText="Yes, Delete"
-          danger={true}
-          onConfirm={executeDelete}
-          onCancel={() => setConfirmDelete(null)}
-        />
-      )}
-
       {showLockConfirm && (
         <ConfirmModal
           title="Lock Mini Vault"
@@ -746,6 +765,17 @@ const MiniVaultView: React.FC<MiniVaultViewProps> = ({ onShowToast, onClose }) =
           danger={true}
           onConfirm={handleLock}
           onCancel={() => setShowLockConfirm(false)}
+        />
+      )}
+
+      {confirmDelete && (
+        <ConfirmModal
+          title={`Delete ${confirmDelete.type === 'entry' ? 'Account' : 'Note'}`}
+          message={`Are you sure you want to delete "${confirmDelete.title}"? This action cannot be undone.`}
+          confirmText="Yes, Delete"
+          danger={true}
+          onConfirm={executeDelete}
+          onCancel={() => setConfirmDelete(null)}
         />
       )}
 

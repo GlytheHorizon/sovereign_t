@@ -4,7 +4,7 @@
   <p><strong>A Premium, High-Security Digital Vault for the Modern Sovereign</strong></p>
 
   <p>
-    <img src="https://img.shields.io/badge/Version-4.5_Stable-cyan?style=for-the-badge" alt="Version" />
+    <img src="https://img.shields.io/badge/Version-5_Stable-cyan?style=for-the-badge" alt="Version" />
     <img src="https://img.shields.io/badge/Platform-Windows-blue?style=for-the-badge&logo=windows" alt="Platform" />
     <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" />
   </p>
