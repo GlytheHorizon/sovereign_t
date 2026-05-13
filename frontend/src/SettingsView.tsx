@@ -298,14 +298,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onLogout }) =>
                 <Shield size={16} />
                 <div className="about-item-content">
                   <label>Version</label>
-                  <span>v5.0 Stable</span>
+                  <span>V6.0 Stable</span>
                 </div>
               </div>
               <div className="about-item-v2">
                 <Shield size={16} />
                 <div className="about-item-content">
                   <label>Build</label>
-                  <span style={{ fontSize: '10px' }}>0513260153AMS</span>
+                  <span style={{ fontSize: '10px' }}>0513260531PMS</span>
                 </div>
               </div>
               <div className="about-item-v2">
@@ -353,7 +353,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onLogout }) =>
           <div className="data-management-grid">
             <div className="data-info-text">
               <p>
-                Maintain total control over your data. You can export your entire vault (including Mini Vault) 
+                Maintain total control over your data. You can export your entire vault (including Mini Vault)
                 to a secure <b>.toaa</b> file for backup, or import data from an existing backup.
               </p>
               <div className="data-warning-box">
@@ -396,7 +396,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onLogout }) =>
             </div>
             <div className="modal-body">
               <p className="auth-modal-desc">
-                Please enter your master password to proceed with the {showAuthModal}. 
+                Please enter your master password to proceed with the {showAuthModal}.
                 This action requires high-level authorization.
               </p>
               <form id="auth-form" onSubmit={handleAuthConfirm}>
@@ -482,11 +482,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onLogout }) =>
               <div className="modal-body">
                 <p className="auth-modal-desc">Save this recovery key now. It is shown once.</p>
 
-                  {recoveryLoading && (
-                    <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                      This may take a while. Please wait.
-                    </div>
-                  )}
+                {recoveryLoading && (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                    This may take a while. Please wait.
+                  </div>
+                )}
                 <div className="form-group">
                   <div className="form-input-wrapper">
                     <input className="form-input auth-input" type="text" readOnly value={recoveryPhrase} />

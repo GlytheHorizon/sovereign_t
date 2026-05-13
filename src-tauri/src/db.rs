@@ -714,6 +714,35 @@ impl VaultDb {
         Ok(())
     }
 
+    pub fn get_meta_val(&self, key: &SecretKey, meta_key: &str) -> Result<Option<String>, DbError> {
+        let conn = self.open(key)?;
+        let result: Result<String, rusqlite::Error> = conn.query_row(
+            "SELECT value FROM meta WHERE key = ?1 LIMIT 1",
+            params![meta_key],
+            |row| row.get(0),
+        );
+        match result {
+            Ok(v) => Ok(Some(v)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(DbError::Sql(e)),
+        }
+    }
+
+    pub fn set_meta_val(&self, key: &SecretKey, meta_key: &str, value: &str) -> Result<(), DbError> {
+        let conn = self.open(key)?;
+        conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)",
+            params![meta_key, value],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_meta_val(&self, key: &SecretKey, meta_key: &str) -> Result<(), DbError> {
+        let conn = self.open(key)?;
+        conn.execute("DELETE FROM meta WHERE key = ?1", params![meta_key])?;
+        Ok(())
+    }
+
     pub fn list_mini_entries(&self, key: &SecretKey) -> Result<Vec<MiniEntrySummary>, DbError> {
         let conn = self.open(key)?;
         let mut stmt = conn.prepare("SELECT entry_id, title, username, category, url, created_at, updated_at FROM mini_entries ORDER BY updated_at DESC")?;

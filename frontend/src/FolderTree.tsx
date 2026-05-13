@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { EntrySummary, GroupSummary } from './api';
-import { Folder, FolderOpen, ChevronRight, ChevronDown, FileText, Trash2, Pencil, GitMerge } from 'lucide-react';
+import {
+  Folder, FolderOpen, ChevronRight, ChevronDown,
+  FileText, Trash2, Pencil, GitMerge, Plus,
+} from 'lucide-react';
 
 interface FolderTreeProps {
   entries: EntrySummary[];
-  /** Groups to render in the tree (may be filtered by search / ribbon). */
   groups: GroupSummary[];
-  /** Full group list for merge dialog. */
   allGroups: GroupSummary[];
   onInfoClick: (id: string) => void;
   onDeleteGroup: (id: string) => void;
@@ -15,156 +17,253 @@ interface FolderTreeProps {
   onOpenMerge: () => void;
 }
 
+const ENTRY_VARIANTS = {
+  hidden: { opacity: 0, x: -10 },
+  visible: (i: number) => ({
+    opacity: 1, x: 0,
+    transition: { delay: i * 0.04, type: 'spring' as const, stiffness: 340, damping: 28 },
+  }),
+  exit: { opacity: 0, x: -8, transition: { duration: 0.14 } },
+};
+
+const GROUP_VARIANTS = {
+  hidden: { opacity: 0, y: 6 },
+  visible: (i: number) => ({
+    opacity: 1, y: 0,
+    transition: { delay: i * 0.06, type: 'spring' as const, stiffness: 320, damping: 26 },
+  }),
+};
+
 const FolderTree: React.FC<FolderTreeProps> = ({
-  entries,
-  groups,
-  allGroups,
-  onInfoClick,
-  onDeleteGroup,
-  onCreateGroup,
-  onRenameGroup,
-  onOpenMerge,
+  entries, groups, allGroups,
+  onInfoClick, onDeleteGroup, onCreateGroup, onRenameGroup, onOpenMerge,
 }) => {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupColor, setNewGroupColor] = useState('#8A2BE2');
+  const [hoveredEntry, setHoveredEntry] = useState<string | null>(null);
 
-  const toggleGroup = (id: string) => {
-    setExpandedGroups(prev => ({ ...prev, [id]: !prev[id] }));
-  };
+  const toggle = (id: string) => setExpandedGroups((p) => ({ ...p, [id]: !p[id] }));
+  const uncategorized = entries.filter((e) => !e.group_id);
 
-  const uncategorized = entries.filter(e => !e.group_id);
-
-  const renderEntry = (entry: EntrySummary) => {
-    return (
-      <div key={entry.entry_id} className="tree-item" onClick={() => onInfoClick(entry.entry_id)}>
-        <div className="tree-item-icon">
-          <FileText size={14} />
-        </div>
-        <div className="tree-item-content">
-          <span className="tree-item-title">{entry.title}</span>
-        </div>
+  const renderEntry = (entry: EntrySummary, index: number) => (
+    <motion.div
+      key={entry.entry_id}
+      className="tree-item"
+      custom={index}
+      variants={ENTRY_VARIANTS}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      layout
+      onHoverStart={() => setHoveredEntry(entry.entry_id)}
+      onHoverEnd={() => setHoveredEntry(null)}
+      onClick={() => onInfoClick(entry.entry_id)}
+      whileTap={{ scale: 0.98 }}
+    >
+      {/* connector line */}
+      <div className="tree-connector">
+        <div className="tree-connector-line" />
+        <div className="tree-connector-dot" />
       </div>
+      <motion.div
+        className="tree-item-icon"
+        animate={hoveredEntry === entry.entry_id ? { scale: 1.15, color: 'var(--accent)' } : { scale: 1 }}
+      >
+        <FileText size={13} />
+      </motion.div>
+      <span className="tree-item-title">{entry.title}</span>
+      {hoveredEntry === entry.entry_id && (
+        <motion.span
+          className="tree-item-hint"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          view →
+        </motion.span>
+      )}
+    </motion.div>
+  );
+
+  const renderGroup = (group: GroupSummary, groupEntries: EntrySummary[], index: number) => {
+    const isExpanded = expandedGroups[group.group_id] === true;
+    return (
+      <motion.div
+        key={group.group_id}
+        className="tree-group"
+        custom={index}
+        variants={GROUP_VARIANTS}
+        initial="hidden"
+        animate="visible"
+        layout
+      >
+        {/* group header */}
+        <motion.div
+          className="tree-group-header"
+          onClick={() => toggle(group.group_id)}
+          whileHover={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
+          style={{ borderLeft: `3px solid ${group.color}` }}
+        >
+          <motion.span
+            className="tree-chevron"
+            animate={{ rotate: isExpanded ? 90 : 0 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+          >
+            <ChevronRight size={13} />
+          </motion.span>
+
+          <motion.span
+            className="tree-folder-icon"
+            style={{ color: group.color }}
+            animate={isExpanded ? { scale: 1.1 } : { scale: 1 }}
+          >
+            {isExpanded
+              ? <FolderOpen size={16} fill="currentColor" fillOpacity={0.2} />
+              : <Folder size={16} fill="currentColor" fillOpacity={0.2} />}
+          </motion.span>
+
+          <span className="tree-group-name">{group.name}</span>
+          <span className="tree-group-count">{groupEntries.length}</span>
+
+          <div className="tree-group-actions" onClick={(e) => e.stopPropagation()}>
+            <motion.button
+              type="button"
+              className="action-btn"
+              onClick={() => onRenameGroup(group)}
+              title="Rename group"
+              whileHover={{ scale: 1.1, color: 'var(--accent)' }}
+              whileTap={{ scale: 0.9 }}
+            >
+              <Pencil size={12} />
+            </motion.button>
+            <motion.button
+              type="button"
+              className="action-btn danger"
+              onClick={() => onDeleteGroup(group.group_id)}
+              title="Delete group"
+              whileHover={{ scale: 1.1, color: 'var(--danger)' }}
+              whileTap={{ scale: 0.9 }}
+            >
+              <Trash2 size={12} />
+            </motion.button>
+          </div>
+        </motion.div>
+
+        {/* animated children */}
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div
+              className="tree-group-items"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
+            >
+              {groupEntries.length === 0 ? (
+                <div className="tree-empty-group">No accounts in this group</div>
+              ) : (
+                groupEntries.map((e, i) => renderEntry(e, i))
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
     );
   };
 
   return (
     <div className="folder-tree-container">
-      <div
-        className="tree-toolbar"
-        style={{ display: 'flex', gap: '8px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}
-      >
+      <div className="tree-graph-header-label">Folder Tree</div>
+      {/* toolbar */}
+      <div className="tree-toolbar">
         <input
-          className="form-input"
-          style={{ flex: '1 1 140px', padding: '6px 12px', fontSize: '13px', minWidth: 0 }}
-          placeholder="New Group Name"
+          className="form-input tree-name-input"
+          placeholder="New group name…"
           value={newGroupName}
           onChange={(e) => setNewGroupName(e.target.value)}
         />
-        <input
-          type="color"
-          className="color-picker"
-          value={newGroupColor}
-          onChange={(e) => setNewGroupColor(e.target.value)}
-          style={{ width: '32px', height: '32px', padding: '0', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-        />
-        <button
+        <label className="tree-color-label" title="Pick group color">
+          <input
+            type="color"
+            className="color-picker"
+            value={newGroupColor}
+            onChange={(e) => setNewGroupColor(e.target.value)}
+          />
+          <span className="tree-color-swatch" style={{ background: newGroupColor }} />
+        </label>
+        <motion.button
           className="btn btn-primary"
-          style={{ padding: '6px 12px', fontSize: '13px' }}
-          onClick={() => {
-            if (newGroupName.trim()) {
-              onCreateGroup(newGroupName.trim(), newGroupColor);
-              setNewGroupName('');
-            }
-          }}
+          onClick={() => { if (newGroupName.trim()) { onCreateGroup(newGroupName.trim(), newGroupColor); setNewGroupName(''); } }}
           disabled={!newGroupName.trim()}
+          whileHover={{ scale: 1.04 }}
+          whileTap={{ scale: 0.97 }}
         >
-          Create Group
-        </button>
-        <button
+          <Plus size={14} /> Create
+        </motion.button>
+        <motion.button
           type="button"
           className="btn btn-ghost"
-          style={{ padding: '6px 12px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           onClick={onOpenMerge}
           disabled={allGroups.length < 2}
           title={allGroups.length < 2 ? 'Need at least two groups' : 'Merge groups'}
+          whileHover={{ scale: 1.04 }}
+          whileTap={{ scale: 0.97 }}
         >
-          <GitMerge size={14} />
-          Merge groups
-        </button>
+          <GitMerge size={14} /> Merge
+        </motion.button>
       </div>
 
-      {groups.map(group => {
-        const groupEntries = entries.filter(e => e.group_id === group.group_id);
-        
-        const isExpanded = expandedGroups[group.group_id] !== false; // Default expanded
-        
-        return (
-          <div key={group.group_id} className="tree-group">
-            <div className="tree-group-header" onClick={() => toggleGroup(group.group_id)}>
-              <span className="tree-chevron">
-                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </span>
-              <span className="tree-folder-icon" style={{ color: group.color }}>
-                {isExpanded ? <FolderOpen size={16} fill="currentColor" fillOpacity={0.2} /> : <Folder size={16} fill="currentColor" fillOpacity={0.2} />}
-              </span>
-              <span className="tree-group-name">{group.name}</span>
-              <span className="tree-group-count">{groupEntries.length} items</span>
-              <button
-                type="button"
-                className="action-btn"
-                style={{ marginLeft: 'auto', opacity: 0.7 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRenameGroup(group);
-                }}
-                title="Rename group"
+      {/* group nodes */}
+      <div className="tree-graph">
+        {/* uncategorized at the top */}
+        {uncategorized.length > 0 && (
+          <motion.div
+            className="tree-group"
+            key="uncategorized"
+            initial="hidden"
+            animate="visible"
+            layout
+          >
+            <motion.div
+              className="tree-group-header"
+              onClick={() => toggle('uncategorized')}
+              whileHover={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
+              style={{ borderLeft: '3px solid var(--text-muted)' }}
+            >
+              <motion.span
+                className="tree-chevron"
+                animate={{ rotate: expandedGroups['uncategorized'] === true ? 90 : 0 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 28 }}
               >
-                <Pencil size={14} />
-              </button>
-              <button
-                type="button"
-                className="action-btn danger"
-                style={{ opacity: 0.7 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteGroup(group.group_id);
-                }}
-                title="Delete Group"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-            
-            {isExpanded && (
-              <div className="tree-group-items">
-                {groupEntries.map(renderEntry)}
-              </div>
-            )}
-          </div>
-        );
-      })}
+                <ChevronRight size={13} />
+              </motion.span>
+              <span className="tree-folder-icon" style={{ color: 'var(--text-muted)' }}>
+                <Folder size={16} />
+              </span>
+              <span className="tree-group-name">Uncategorized</span>
+              <span className="tree-group-count">{uncategorized.length}</span>
+            </motion.div>
+            <AnimatePresence>
+              {expandedGroups['uncategorized'] === true && (
+                <motion.div
+                  className="tree-group-items"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeInOut' }}
+                >
+                  {uncategorized.map((e, i) => renderEntry(e, i))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        )}
 
-      {uncategorized.length > 0 && (
-        <div className="tree-group">
-          <div className="tree-group-header" onClick={() => toggleGroup('uncategorized')}>
-            <span className="tree-chevron">
-              {expandedGroups['uncategorized'] !== false ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </span>
-            <span className="tree-folder-icon" style={{ color: 'var(--text-muted)' }}>
-              {expandedGroups['uncategorized'] !== false ? <FolderOpen size={16} /> : <Folder size={16} />}
-            </span>
-            <span className="tree-group-name">Uncategorized</span>
-            <span className="tree-group-count" style={{ marginRight: 'auto' }}>{uncategorized.length} items</span>
-          </div>
-          
-          {expandedGroups['uncategorized'] !== false && (
-            <div className="tree-group-items">
-              {uncategorized.map(renderEntry)}
-            </div>
-          )}
-        </div>
-      )}
+        {/* other groups */}
+        {groups.map((group, idx) =>
+          renderGroup(group, entries.filter((e) => e.group_id === group.group_id), idx)
+        )}
+      </div>
     </div>
   );
 };

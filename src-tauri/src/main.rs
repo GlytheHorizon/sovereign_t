@@ -255,6 +255,16 @@ struct MergeGroupsInput {
 }
 
 #[derive(Debug, Deserialize)]
+struct SetDecoyInput {
+    password: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct DecoyStatus {
+    enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
 struct GeneratePasswordInput {
     length: usize,
     numbers: bool,
@@ -290,6 +300,99 @@ enum VaultSection {
 }
 
 
+
+#[tauri::command]
+async fn get_decoy_status(state: State<'_, AppState>) -> CommandResult<DecoyStatus> {
+    let session_guard = state.session.lock().unwrap();
+    let session = session_guard.as_ref().ok_or_else(|| AppError::new("unauthorized", "Session expired"))?;
+    
+    let db = state.db.lock().unwrap();
+    let meta_val = db.get_meta_val(&session.key, "decoy_hash").map_err(AppError::from)?;
+    
+    Ok(DecoyStatus { enabled: meta_val.is_some() })
+}
+
+#[tauri::command]
+async fn set_decoy_protocol(state: State<'_, AppState>, input: SetDecoyInput) -> CommandResult<()> {
+    let session_guard = state.session.lock().unwrap();
+    let session = session_guard.as_ref().ok_or_else(|| AppError::new("unauthorized", "Session expired"))?;
+    
+    let db = state.db.lock().unwrap();
+    if let Some(pw) = input.password {
+        if pw.len() < 12 { return Err(AppError::new("invalid_input", "Decoy password too short (12 chars min).")); }
+        
+        let salt_path = state.salt_path.lock().unwrap();
+        let salt = fs::read(&*salt_path)?;
+        let key = derive_master_key(&pw, &salt)?;
+        
+        let decoy_path = state.app_data_dir.join("decoy.db");
+        let db_decoy = VaultDb::new(decoy_path);
+        db_decoy.create_new(&key).map_err(AppError::from)?;
+        
+        // --- Pre-create a realistic "Shadow World" ---
+        let services = vec![
+            "Gmail", "Proton", "LinkedIn", "GitHub", "Facebook", "X (Twitter)", "Instagram", "Netflix", 
+            "Disney+", "Amazon", "eBay", "PayPal", "Binance", "Coinbase", "Steam", "Epic Games", 
+            "Spotify", "Apple ID", "Microsoft", "Slack", "Zoom", "Discord", "Trello", "Notion", 
+            "Adobe", "Canva", "Dropbox", "Google Drive", "Reddit", "Stack Overflow", "Medium",
+            "ChatGPT", "Claude", "Vercel", "Railway", "AWS", "Azure", "DigitalOcean", "Cloudflare"
+        ];
+
+        let email_patterns = vec![
+            "jerwin.cruz", "j.cruz", "cruz.jerwin", "jerwin.cruz.dev", "jerwin.cruz.official", 
+            "j.cruz.pro", "jerwin_cruz", "cruz_jerwin88", "j.cruz.it"
+        ];
+
+        for i in 0..67 {
+            let service = services[i % services.len()];
+            let pattern = email_patterns[i % email_patterns.len()];
+            
+            let title = if i < services.len() {
+                service.to_string()
+            } else {
+                format!("{} Account {}", service, (i / services.len()) + 1)
+            };
+
+            let user = if i % 3 == 0 {
+                format!("{}@gmail.com", pattern)
+            } else if i % 3 == 1 {
+                format!("{}.{}@gmail.com", pattern, i)
+            } else {
+                format!("{}@sovereign-solutions.ph", pattern)
+            };
+
+            let notes = format!("Primary {} access for Jerwin Cruz. Logged in via local vault.", service);
+            
+            let entry = crate::db::NewEntryEncrypted {
+                entry_id: Uuid::new_v4().to_string(),
+                title,
+                username: user,
+                url: format!("https://{}.com", service.to_lowercase().replace(' ', "")),
+                group_id: None,
+                password: crypto::encrypt_field(b"SovereignDummyPass123!", &key, b"entry_password")?,
+                notes: crypto::encrypt_field(notes.as_bytes(), &key, b"entry_notes")?,
+                favorite: i % 12 == 0,
+                trashed: false,
+                created_at: now_epoch(),
+                updated_at: now_epoch(),
+            };
+            db_decoy.insert_entry(&key, entry).map_err(AppError::from)?;
+        }
+
+        // Create a lightweight marker for instant routing
+        let marker_path = state.app_data_dir.join("ghost.marker");
+        fs::write(marker_path, b"armed")?;
+
+        db.set_meta_val(&session.key, "decoy_hash", "enabled").map_err(AppError::from)?;
+    } else {
+        let decoy_path = state.app_data_dir.join("decoy.db");
+        let marker_path = state.app_data_dir.join("ghost.marker");
+        if decoy_path.exists() { let _ = fs::remove_file(decoy_path); }
+        if marker_path.exists() { let _ = fs::remove_file(marker_path); }
+        db.delete_meta_val(&session.key, "decoy_hash").map_err(AppError::from)?;
+    }
+    Ok(())
+}
 
 #[tauri::command]
 async fn export_vault(state: State<'_, AppState>, password: String) -> CommandResult<()> {
@@ -616,34 +719,60 @@ fn create_vault(state: State<AppState>, input: CreateVaultInput) -> CommandResul
 
 #[tauri::command]
 fn unlock_vault(state: State<AppState>, input: UnlockVaultInput) -> CommandResult<()> {
-    let db = state.db.lock().map_err(|_| AppError::new("state_error", ""))?;
-    let salt_path = state.salt_path.lock().map_err(|_| AppError::new("state_error", ""))?;
-
-    validate_len(
-        "master_password",
-        &input.password,
-        MASTER_PASSWORD_MIN,
-        MASTER_PASSWORD_MAX,
-    )?;
-
-    let salt = fs::read(&*salt_path)?;
-    if salt.len() != SALT_LEN {
-        return Err(AppError::new("salt_error", "Vault salt is invalid."));
+    let mut db_handle = state.db.lock().map_err(|_| AppError::new("state_error", ""))?;
+    let mut active_vault_name = state.active_vault.lock().unwrap().clone();
+    
+    // Safety check: If we were in Ghost Mode, we need to reset to the primary vault file.
+    // We assume "vault" is the primary name unless it was specifically switched.
+    if active_vault_name == "Ghost Mode" {
+        active_vault_name = "vault".to_string();
     }
 
-    let mut password = input.password;
-    let key = derive_master_key(&password, &salt)?;
-    password.zeroize();
+    validate_len("master_password", &input.password, MASTER_PASSWORD_MIN, MASTER_PASSWORD_MAX)?;
 
-    db.verify_key(&key)?;
-    let now = now_epoch();
-    let _ = db.log_event(&key, "vault_unlocked", "vault", now);
+    let main_db_path = state.app_data_dir.join(format!("{}.db", active_vault_name));
+    let salt_path = state.app_data_dir.join(format!("{}.salt", active_vault_name));
+    
+    if db_handle.path() != main_db_path {
+        *db_handle = VaultDb::new(main_db_path);
+    }
 
-    let mut guard = state.session.lock().map_err(|_| {
-        AppError::new("state_error", "Session state is unavailable.")
-    })?;
-    *guard = Some(Session::new(key));
-    Ok(())
+    let salt = fs::read(&salt_path)?;
+    let key = derive_master_key(&input.password, &salt)?;
+    
+    // Check for Ghost Marker
+    let marker_path = state.app_data_dir.join("ghost.marker");
+    if marker_path.exists() {
+        let decoy_path = state.app_data_dir.join("decoy.db");
+        let db_decoy = VaultDb::new(decoy_path);
+        if let Ok(_) = db_decoy.verify_key(&key) {
+             // Shadow Routing
+            *db_handle = db_decoy;
+            let mut active_vault = state.active_vault.lock().unwrap();
+            *active_vault = "Ghost Mode".to_string();
+            
+            let mut guard = state.session.lock().unwrap();
+            *guard = Some(Session::new(key));
+            return Ok(());
+        }
+    }
+
+    // Attempt real vault
+    match db_handle.verify_key(&key) {
+        Ok(_) => {
+            let now = now_epoch();
+            let _ = db_handle.log_event(&key, "vault_unlocked", "vault", now);
+            
+            // Sync the active vault name back to the state (resets from Ghost Mode if needed)
+            let mut active_vault_state = state.active_vault.lock().unwrap();
+            *active_vault_state = active_vault_name;
+            
+            let mut guard = state.session.lock().unwrap();
+            *guard = Some(Session::new(key));
+            Ok(())
+        }
+        Err(_) => Err(AppError::new("auth_failed", "Invalid master password."))
+    }
 }
 
 #[tauri::command]
@@ -2028,6 +2157,8 @@ fn main() {
             restore_from_trash,
             delete_entry,
             copy_entry_secret,
+            get_decoy_status,
+            set_decoy_protocol,
             get_entry_secrets,
             generate_password,
             copy_to_clipboard,

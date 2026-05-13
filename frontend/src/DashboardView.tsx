@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   RefreshCw,
   Shield,
@@ -19,9 +19,75 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  Zap,
+  Target,
+  Brain,
+  Ghost,
+  QrCode,
 } from 'lucide-react';
 import { invoke } from './api';
 import ConfirmModal from './ConfirmModal';
+
+// ── Animated counter hook ──────────────────────────────────────────────────
+function useAnimatedCount(target: number, duration = 800) {
+  const [count, setCount] = useState(0);
+  const raf = useRef<number | null>(null);
+  useEffect(() => {
+    const start = performance.now();
+    const from = 0;
+    const tick = (now: number) => {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(from + (target - from) * eased));
+      if (progress < 1) raf.current = requestAnimationFrame(tick);
+    };
+    raf.current = requestAnimationFrame(tick);
+    return () => { if (raf.current) cancelAnimationFrame(raf.current); };
+  }, [target, duration]);
+  return count;
+}
+
+// ── Risk helpers ───────────────────────────────────────────────────────────
+function getRiskGrade(score: number): { label: string; color: string; cls: string } {
+  if (score >= 80) return { label: 'Strong',   color: 'var(--success)', cls: 'r-3' };
+  if (score >= 60) return { label: 'Fair',     color: 'var(--accent)',  cls: 'r-2' };
+  if (score >= 40) return { label: 'Weak',     color: '#f59e0b',        cls: 'r-1' };
+  return              { label: 'Critical', color: 'var(--danger)', cls: 'r-0' };
+}
+
+// ── Risk Legend ────────────────────────────────────────────────────────────
+const RiskLegend: React.FC = () => (
+  <div className="risk-legend">
+    <span className="risk-legend-title">Score legend:</span>
+    {([
+      { range: '80–100', label: 'Strong',   color: 'var(--success)' },
+      { range: '60–79',  label: 'Fair',     color: 'var(--accent)'  },
+      { range: '40–59',  label: 'Weak',     color: '#f59e0b'        },
+      { range: '0–39',   label: 'Critical', color: 'var(--danger)'  },
+    ] as const).map(({ range, label, color }) => (
+      <span key={label} className="risk-legend-item">
+        <span className="risk-legend-dot" style={{ background: color }} />
+        <span style={{ color }}>{label}</span>
+        <span className="risk-legend-range">{range}</span>
+      </span>
+    ))}
+  </div>
+);
+
+// ── Stat card with animated counter ───────────────────────────────────────
+const StatCard: React.FC<{ icon: React.ReactNode; value: number; label: string; decimals?: number }> = ({ icon, value, label, decimals = 0 }) => {
+  const animated = useAnimatedCount(value);
+  return (
+    <div className="dashboard-card">
+      {icon}
+      <div className="dashboard-card-value">{decimals > 0 ? value.toFixed(decimals) : animated}</div>
+      <div className="dashboard-card-label">{label}</div>
+    </div>
+  );
+};
 
 export interface VaultDashboardStats {
   active_accounts: number;
@@ -93,6 +159,7 @@ function SortRiskTh({
 }
 
 const DashboardView: React.FC<DashboardViewProps> = ({ onRefreshVault, onOpenEntry }) => {
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [stats, setStats] = useState<VaultDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -198,96 +265,104 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onRefreshVault, onOpenEnt
   if (!stats) return null;
 
   return (
-    <div className="dashboard-root">
-      <div className="dashboard-header">
-        <div>
-          <h2 className="dashboard-title">
-            <Activity size={20} style={{ opacity: 0.9 }} />
-            Vault intelligence
-          </h2>
-          <p className="dashboard-sub">Password hygiene, reuse, and exposure at a glance.</p>
-        </div>
-        <button type="button" className="btn btn-ghost dashboard-refresh" onClick={() => { void load(); onRefreshVault(); }}>
-          <RefreshCw size={16} /> Refresh
+    <div className="dashboard-view">
+      <div className="dashboard-header-row">
+        <h2 className="dashboard-title"><Activity size={20} /> Vault Intelligence</h2>
+        <button 
+          type="button" 
+          className="btn btn-ghost dashboard-refresh" 
+          onClick={async () => { 
+            setIsRefreshing(true);
+            await load(); 
+            onRefreshVault(); 
+            setTimeout(() => setIsRefreshing(false), 600);
+          }}
+          disabled={isRefreshing}
+        >
+          <RefreshCw size={16} className={isRefreshing ? 'refresh-spin' : ''} /> Refresh
         </button>
       </div>
 
       <div className="dashboard-top-band">
         <div className="dashboard-hero">
-          <div className="dashboard-health-ring" style={{ '--health-color': healthColor } as React.CSSProperties}>
-            <svg viewBox="0 0 100 100" className="dashboard-health-svg">
-              <circle className="dashboard-health-bg" cx="50" cy="50" r="42" />
-              <circle
-                className="dashboard-health-fg"
-                cx="50"
-                cy="50"
-                r="42"
-                strokeDasharray={`${(stats.vault_health_score / 100) * 264} 264`}
-              />
-            </svg>
-            <div className="dashboard-health-label">
-              <span className="dashboard-health-value">{stats.vault_health_score}</span>
-              <span className="dashboard-health-cap">health</span>
+          <div className="dashboard-hero-main">
+            <div className="hero-stat-badge left">
+              <span className="badge-val">{stats.avg_risk_score}</span>
+              <span className="badge-label">Avg Strength</span>
+            </div>
+
+            <div className="dashboard-health-ring" style={{ '--health-color': healthColor } as React.CSSProperties}>
+              <svg viewBox="0 0 100 100" className="dashboard-health-svg">
+                <circle className="dashboard-health-bg" cx="50" cy="50" r="42" />
+                <circle
+                  className="dashboard-health-fg"
+                  cx="50"
+                  cy="50"
+                  r="42"
+                  strokeDasharray={`${(stats.vault_health_score / 100) * 264} 264`}
+                />
+              </svg>
+              <div className="dashboard-health-label">
+                <span className="dashboard-health-value">{stats.vault_health_score}</span>
+                <span className="dashboard-health-cap">HEALTH</span>
+              </div>
+            </div>
+
+            <div className="hero-stat-badge right">
+              <span className="badge-val">{stats.unique_passwords}</span>
+              <span className="badge-label">Unique Keys</span>
             </div>
           </div>
-          <div className="dashboard-hero-copy">
-            <p className="dashboard-hero-lead">
-              Avg strength <strong>{stats.avg_risk_score}</strong>/100 · Unique passwords <strong>{stats.unique_passwords}</strong>{' '}
-              · Accounts <strong>{stats.active_accounts}</strong>
-            </p>
-            {stats.accounts_with_reused_password > 0 && (
-              <p className="dashboard-warn">
-                <ShieldAlert size={14} />
-                <span>
-                  <strong>{stats.accounts_with_reused_password}</strong> accounts share a password with another entry — use
-                  unique passwords per site.
-                </span>
-              </p>
-            )}
-          </div>
+
+          {stats.accounts_with_reused_password > 0 && (
+            <div className="dashboard-hero-warning-banner">
+              <ShieldAlert size={18} />
+              <div className="warning-text">
+                <strong>{stats.accounts_with_reused_password} security violations detected.</strong>
+                <span>Shared passwords identified across services. High credential stuffing risk.</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="dashboard-cards">
-        <div className="dashboard-card">
-          <Users size={18} className="dashboard-card-icon" />
-          <div className="dashboard-card-value">{stats.active_accounts}</div>
-          <div className="dashboard-card-label">Active accounts</div>
+          <StatCard icon={<Users size={18} />} value={stats.active_accounts} label="Active accounts" />
+          <StatCard icon={<Star size={18} />} value={stats.favorites_count} label="Favorites" />
+          <StatCard icon={<Trash2 size={18} />} value={stats.trash_count} label="In trash" />
+          <StatCard icon={<FolderOpen size={18} />} value={stats.groups_count} label="Groups" />
+          <StatCard icon={<Fingerprint size={18} />} value={stats.uncategorized_accounts} label="Uncategorized" />
+          <StatCard icon={<Link2 size={18} />} value={stats.entries_with_url} label="With URL" />
+          <StatCard icon={<KeyRound size={18} />} value={stats.avg_password_length} label="Avg pw length" decimals={1} />
+          <StatCard icon={<TrendingUp size={18} />} value={stats.recently_updated_count} label="Updated (30d)" />
         </div>
-        <div className="dashboard-card">
-          <Star size={18} className="dashboard-card-icon" />
-          <div className="dashboard-card-value">{stats.favorites_count}</div>
-          <div className="dashboard-card-label">Favorites</div>
-        </div>
-        <div className="dashboard-card">
-          <Trash2 size={18} className="dashboard-card-icon" />
-          <div className="dashboard-card-value">{stats.trash_count}</div>
-          <div className="dashboard-card-label">In trash</div>
-        </div>
-        <div className="dashboard-card">
-          <FolderOpen size={18} className="dashboard-card-icon" />
-          <div className="dashboard-card-value">{stats.groups_count}</div>
-          <div className="dashboard-card-label">Groups</div>
-        </div>
-        <div className="dashboard-card">
-          <Fingerprint size={18} className="dashboard-card-icon" />
-          <div className="dashboard-card-value">{stats.uncategorized_accounts}</div>
-          <div className="dashboard-card-label">Uncategorized</div>
-        </div>
-        <div className="dashboard-card">
-          <Link2 size={18} className="dashboard-card-icon" />
-          <div className="dashboard-card-value">{stats.entries_with_url}</div>
-          <div className="dashboard-card-label">With URL</div>
-        </div>
-        <div className="dashboard-card">
-          <KeyRound size={18} className="dashboard-card-icon" />
-          <div className="dashboard-card-value">{stats.avg_password_length.toFixed(1)}</div>
-          <div className="dashboard-card-label">Avg password length</div>
-        </div>
-        <div className="dashboard-card">
-          <TrendingUp size={18} className="dashboard-card-icon" />
-          <div className="dashboard-card-value">{stats.recently_updated_count}</div>
-          <div className="dashboard-card-label">Updated (30d)</div>
-        </div>
+      </div>
+
+      <div className="dashboard-scoring-guide">
+        <h3 className="dashboard-section-title"><Shield size={16} /> Scoring Deduction Map</h3>
+        <div className="deduction-grid">
+          <div className="deduction-category">
+            <div className="category-label">Length Requirements</div>
+            <div className="deduction-list">
+              <div className="deduction-row"><span className="val bad">-50</span> <span className="desc">Critical Shortness (&lt;6 chars)</span></div>
+              <div className="deduction-row"><span className="val bad">-35</span> <span className="desc">Short Password (&lt;8 chars)</span></div>
+              <div className="deduction-row"><span className="val warn">-15</span> <span className="desc">Sub-optimal (&lt;12 chars)</span></div>
+            </div>
+          </div>
+          <div className="deduction-category">
+            <div className="category-label">Complexity Rules</div>
+            <div className="deduction-list">
+              <div className="deduction-row"><span className="val warn">-14</span> <span className="desc">No Numbers</span></div>
+              <div className="deduction-row"><span className="val warn">-12</span> <span className="desc">No Symbols</span></div>
+              <div className="deduction-row"><span className="val warn">-10</span> <span className="desc">No Uppercase</span></div>
+            </div>
+          </div>
+          <div className="deduction-category">
+            <div className="category-label">Systemic Risk</div>
+            <div className="deduction-list">
+              <div className="deduction-row"><span className="val danger">-45</span> <span className="desc">Common Password</span></div>
+              <div className="deduction-row"><span className="val danger">-30</span> <span className="desc">Reuse Violation</span></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -357,11 +432,50 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onRefreshVault, onOpenEnt
       )}
       </div>
 
+      {/* ── Security Insights ── */}
+      <div className="security-insights-panel">
+        <h3 className="dashboard-section-title"><Zap size={16} /> Security Insights</h3>
+        <div className="security-insights-grid">
+          <div className={`insight-card ${stats.accounts_with_reused_password > 0 ? 'warn' : 'good'}`}>
+            {stats.accounts_with_reused_password > 0
+              ? <AlertTriangle size={18} />
+              : <CheckCircle2 size={18} />}
+            <div>
+              <div className="insight-title">{stats.accounts_with_reused_password > 0 ? `${stats.accounts_with_reused_password} reused passwords` : 'No password reuse'}</div>
+              <div className="insight-sub">{stats.accounts_with_reused_password > 0 ? 'Use unique passwords per site' : 'All passwords are unique'}</div>
+            </div>
+          </div>
+          <div className={`insight-card ${stats.strength_tier_counts.critical > 0 ? 'danger' : stats.strength_tier_counts.weak > 0 ? 'warn' : 'good'}`}>
+            {stats.strength_tier_counts.critical > 0 ? <AlertTriangle size={18} /> : <Shield size={18} />}
+            <div>
+              <div className="insight-title">
+                {stats.strength_tier_counts.critical > 0 ? `${stats.strength_tier_counts.critical} critical` : stats.strength_tier_counts.weak > 0 ? `${stats.strength_tier_counts.weak} weak` : 'Good password strength'}
+              </div>
+              <div className="insight-sub">{stats.strength_tier_counts.strong} strong · {stats.strength_tier_counts.fair} fair</div>
+            </div>
+          </div>
+          <div className={`insight-card ${(stats.avg_password_length < 12) ? 'warn' : 'good'}`}>
+            <Info size={18} />
+            <div>
+              <div className="insight-title">Avg length {stats.avg_password_length.toFixed(1)} chars</div>
+              <div className="insight-sub">{stats.avg_password_length < 12 ? 'Aim for 16+ characters' : 'Length is solid'}</div>
+            </div>
+          </div>
+          <div className={`insight-card ${stats.uncategorized_accounts > 5 ? 'warn' : 'good'}`}>
+            <FolderOpen size={18} />
+            <div>
+              <div className="insight-title">{stats.uncategorized_accounts} uncategorized</div>
+              <div className="insight-sub">{stats.uncategorized_accounts > 5 ? 'Organize into groups' : 'Well organized'}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="dashboard-risk-section">
         <div className="dashboard-risk-head">
           <div>
             <h3 className="dashboard-section-title">Highest-risk accounts</h3>
-            <p className="dashboard-section-hint">Lower score = more issues. Click a row for details. {RISK_PAGE_SIZE} rows per page.</p>
+            <p className="dashboard-section-hint">Lower score = more issues. Click a row for details.</p>
           </div>
           <div className="dashboard-risk-search">
             <span className="dashboard-risk-search-icon">
@@ -423,9 +537,41 @@ const DashboardView: React.FC<DashboardViewProps> = ({ onRefreshVault, onOpenEnt
                     <td>{row.title}</td>
                     <td>{row.username_display || '—'}</td>
                     <td>
-                      <span className={`dashboard-risk-pill r-${Math.floor(row.risk_score / 25)}`}>{row.risk_score}</span>
+                      {(() => { const g = getRiskGrade(row.risk_score); return (
+                        <span className={`dashboard-risk-pill ${g.cls}`} style={{ color: g.color, borderColor: g.color }}>
+                          {row.risk_score} <span className="risk-pill-label">{g.label}</span>
+                        </span>
+                      ); })()}
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{row.reasons[0] || '—'}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      <div className="risk-reasons-preview">
+                        <div className="risk-math-breakdown">
+                           <span className="math-base">100</span>
+                           {row.reasons.map((r, i) => {
+                             let penalty = 0;
+                             if (r.includes("Very short")) penalty = 50;
+                             else if (r.includes("Short password")) penalty = 35;
+                             else if (r.includes("Under 12 characters")) penalty = 15;
+                             else if (r.includes("No numbers")) penalty = 14;
+                             else if (r.includes("No uppercase")) penalty = 10;
+                             else if (r.includes("No symbols")) penalty = 12;
+                             else if (r.includes("Mostly lowercase")) penalty = 8;
+                             else if (r.includes("well-known weak")) penalty = 45;
+                             else if (r.includes("Reused")) penalty = 30;
+                             return <span key={i} className="math-penalty" title={r}>-{penalty}</span>;
+                           })}
+                           <span className="math-equals">=</span>
+                           <span className="math-result">{row.risk_score}</span>
+                        </div>
+                      </div>
+                      <div className="risk-reasons-detail">
+                        {row.reasons.map((r, i) => (
+                          <div key={i} className="risk-reason-item">
+                            <AlertTriangle size={10} /> {r}
+                          </div>
+                        ))}
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
