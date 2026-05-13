@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { invoke } from './api';
 import { Shield, Eye, EyeOff, Lock, Unlock, AlertTriangle, Key, ArrowRight, X } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
+import Waves from './Waves';
 
 interface AuthScreenProps {
   onUnlocked: () => void;
@@ -52,6 +53,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
     }
 
     setLoading(true);
+    setProgress(10); // Feedback immediately
     try {
       let pendingRecovery: string | null = null;
       if (mode === 'create') {
@@ -72,28 +74,22 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
           await invoke('unlock_vault', { input: { password } });
         }
       }
+      
+      setProgress(100);
       setPassword('');
       setConfirmPassword('');
       setRecoveryInput('');
       
-      // Speed up progress timer for faster login feel
-      let p = 0;
-      const interval = setInterval(() => {
-        p += 10;
-        setProgress(p);
-        if (p >= 100) {
-          clearInterval(interval);
-          setLoading(false);
-          if (pendingRecovery) {
-            setShowRecoveryModal(true);
-          } else {
-            onUnlocked();
-          }
-        }
-      }, 20);
+      setLoading(false);
+      if (pendingRecovery) {
+        setShowRecoveryModal(true);
+      } else {
+        onUnlocked();
+      }
     } catch (e: any) {
       setError(e?.message || 'Authentication failed.');
       setLoading(false);
+      setProgress(0);
     }
   };
 
@@ -134,17 +130,45 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onUnlocked }) => {
   };
 
   return (
-    <div className="auth-screen">
+    <div className="auth-screen relative">
+      <Waves
+        lineColor="rgba(0, 212, 255, 0.15)"
+        backgroundColor="#080b12"
+        waveSpeedX={0.02}
+        waveSpeedY={0.01}
+        waveAmpX={40}
+        waveAmpY={20}
+        friction={0.9}
+        tension={0.01}
+        maxCursorMove={120}
+        xGap={12}
+        yGap={36}
+      />
 
-      <div className="auth-logo-section">
-        <div className="auth-logo-box">
-          <img src="/stv2.png" alt="Sovereign_T" style={{ width: 50, height: 50, objectFit: 'contain' }} />
+      <header className="auth-brand-header relative z-10">
+        <div className="auth-brand-row">
+          <div className="auth-ruler auth-ruler--left" aria-hidden="true">
+            <span className="auth-ruler__baseline" />
+            <span className="auth-ruler__ticks" />
+            <span className="auth-ruler__shimmer" />
+          </div>
+
+          <div className="auth-brand-cluster">
+            <h1 className="auth-brand-title" aria-label="Sovereigni-T">
+              SOVEREIGN-T
+            </h1>
+          </div>
+
+          <div className="auth-ruler auth-ruler--right" aria-hidden="true">
+            <span className="auth-ruler__baseline" />
+            <span className="auth-ruler__ticks" />
+            <span className="auth-ruler__shimmer" />
+          </div>
         </div>
-        <h1 className="auth-brand-name">SOVEREIGN_T</h1>
-        <p className="auth-brand-subtitle">Secure Digital Vault</p>
-      </div>
+        <p className="auth-brand-subtitle auth-brand-subtitle--header">Secure Digital Vault</p>
+      </header>
 
-      <div className="auth-card-polished">
+      <div className="auth-card-polished relative z-10">
         <form onSubmit={handleSubmit}>
           {error && (
             <div className="auth-error" style={{ marginBottom: 20 }}>

@@ -42,7 +42,7 @@ impl VaultDb {
     }
 
     pub fn verify_key(&self, key: &SecretKey) -> Result<(), DbError> {
-        let conn = self.open(key)?;
+        let conn = self.open_no_migrate(key)?;
         let result: Result<String, rusqlite::Error> = conn.query_row(
             "SELECT value FROM meta WHERE key = 'schema_version' LIMIT 1",
             [],
@@ -515,6 +515,12 @@ impl VaultDb {
         Ok(conn)
     }
 
+    fn open_no_migrate(&self, key: &SecretKey) -> Result<Connection, DbError> {
+        let conn = Connection::open(&self.path)?;
+        apply_pragmas(&conn, key)?;
+        Ok(conn)
+    }
+
     fn create_schema(&self, conn: &Connection) -> Result<(), DbError> {
         conn.execute_batch(
             "PRAGMA secure_delete = ON;
@@ -589,7 +595,34 @@ impl VaultDb {
     }
 
     fn migrate_schema(&self, conn: &Connection) -> Result<(), DbError> {
-        // Robust table creation - ensure these always exist first
+        let meta_exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'",
+                [],
+                |_| Ok(1),
+            )
+            .is_ok();
+
+        if !meta_exists {
+            self.create_schema(conn)?;
+            return Ok(());
+        }
+
+        let version: i64 = conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'schema_version' LIMIT 1",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .ok()
+            .and_then(|value| value.parse::<i64>().ok())
+            .unwrap_or(1);
+
+        if version >= 5 {
+            return Ok(());
+        }
+
+        // Legacy migrations for versions < 5
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS mini_entries (
                 entry_id TEXT PRIMARY KEY,
@@ -618,28 +651,6 @@ impl VaultDb {
             );
             "
         )?;
-
-        let meta_exists: bool = conn
-            .query_row(
-                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'",
-                [],
-                |_| Ok(1),
-            )
-            .is_ok();
-
-        if !meta_exists {
-            return Ok(());
-        }
-
-        let version: i64 = conn
-            .query_row(
-                "SELECT value FROM meta WHERE key = 'schema_version' LIMIT 1",
-                [],
-                |row| row.get::<_, String>(0),
-            )
-            .ok()
-            .and_then(|value| value.parse::<i64>().ok())
-            .unwrap_or(1);
 
         if version < 2 {
             let _ = conn.execute_batch(

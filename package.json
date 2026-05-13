@@ -1,0 +1,13 @@
+{
+  "name": "sovereign-t",
+  "version": "1.0.0",
+  "description": "Sovereign_T Root Workspace",
+  "scripts": {
+    "tauri": "npx @tauri-apps/cli",
+    "dev": "npx @tauri-apps/cli dev",
+    "build": "npx @tauri-apps/cli build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "latest"
+  }
+}
