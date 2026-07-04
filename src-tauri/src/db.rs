@@ -61,13 +61,13 @@ impl VaultDb {
     ) -> Result<Vec<EntrySummary>, DbError> {
         let conn = self.open(key)?;
         let query = if filter.trashed_only {
-            "SELECT entry_id, title, username, url, group_id, favorite, trashed, created_at, updated_at \
+            "SELECT entry_id, title, username, url, group_id, favorite, trashed, created_at, updated_at, password_nonce, password_ct \
              FROM entries WHERE trashed = 1 ORDER BY updated_at DESC"
         } else if filter.favorites_only {
-            "SELECT entry_id, title, username, url, group_id, favorite, trashed, created_at, updated_at \
+            "SELECT entry_id, title, username, url, group_id, favorite, trashed, created_at, updated_at, password_nonce, password_ct \
              FROM entries WHERE favorite = 1 AND trashed = 0 ORDER BY updated_at DESC"
         } else {
-            "SELECT entry_id, title, username, url, group_id, favorite, trashed, created_at, updated_at \
+            "SELECT entry_id, title, username, url, group_id, favorite, trashed, created_at, updated_at, password_nonce, password_ct \
              FROM entries WHERE trashed = 0 ORDER BY updated_at DESC"
         };
 
@@ -76,16 +76,39 @@ impl VaultDb {
         let mut entries = Vec::new();
 
         while let Some(row) = rows.next()? {
+            let entry_id: String = row.get(0)?;
+            let title: String = row.get(1)?;
+            let username: String = row.get(2)?;
+            let url: String = row.get(3)?;
+            let group_id: Option<String> = row.get(4)?;
+            let favorite: bool = row.get::<_, i64>(5)? != 0;
+            let trashed: bool = row.get::<_, i64>(6)? != 0;
+            let created_at: i64 = row.get(7)?;
+            let updated_at: i64 = row.get(8)?;
+            
+            let password_nonce_vec: Vec<u8> = row.get(9)?;
+            let password_ct: Vec<u8> = row.get(10)?;
+            
+            let mut risk_score = 0;
+            if let Ok(password_nonce) = nonce_from_vec(password_nonce_vec) {
+                if let Ok(pw_bytes) = crate::crypto::decrypt_field(&password_nonce, &password_ct, key, &crate::crypto::aad_for_entry(&entry_id, "password")) {
+                    if let Ok(pw_str) = std::str::from_utf8(&pw_bytes) {
+                        risk_score = estimate_risk_score(pw_str);
+                    }
+                }
+            }
+
             entries.push(EntrySummary {
-                entry_id: row.get(0)?,
-                title: row.get(1)?,
-                username: row.get(2)?,
-                url: row.get(3)?,
-                group_id: row.get(4)?,
-                favorite: row.get::<_, i64>(5)? != 0,
-                trashed: row.get::<_, i64>(6)? != 0,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
+                entry_id,
+                title,
+                username,
+                url,
+                group_id,
+                favorite,
+                trashed,
+                created_at,
+                updated_at,
+                risk_score,
             });
         }
 
@@ -947,6 +970,7 @@ pub struct EntrySummary {
     pub trashed: bool,
     pub created_at: i64,
     pub updated_at: i64,
+    pub risk_score: u8,
 }
 
 #[derive(Debug, Serialize)]
@@ -1079,4 +1103,36 @@ fn nonce_from_vec(value: Vec<u8>) -> Result<[u8; NONCE_LEN], DbError> {
     let mut nonce = [0u8; NONCE_LEN];
     nonce.copy_from_slice(&value);
     Ok(nonce)
+}
+
+fn estimate_risk_score(password: &str) -> u8 {
+    let len = password.chars().count();
+    if len == 0 {
+        return 0;
+    }
+    let has_lower = password.chars().any(|c| c.is_lowercase());
+    let has_upper = password.chars().any(|c| c.is_uppercase());
+    let has_digit = password.chars().any(|c| c.is_ascii_digit());
+    let has_symbol = password.chars().any(|c| !c.is_ascii_alphanumeric());
+
+    let mut score: i32 = 20;
+    if len >= 8 {
+        score += 20;
+    }
+    if len >= 12 {
+        score += 20;
+    }
+    if len >= 16 {
+        score += 20;
+    }
+    if has_lower && has_upper {
+        score += 10;
+    }
+    if has_digit {
+        score += 5;
+    }
+    if has_symbol {
+        score += 5;
+    }
+    std::cmp::min(100, score) as u8
 }

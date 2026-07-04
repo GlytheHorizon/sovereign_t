@@ -10,6 +10,7 @@ export interface EntrySummary {
   trashed: boolean;
   created_at: number;
   updated_at: number;
+  risk_score?: number;
 }
 
 export interface GroupSummary {
@@ -163,6 +164,12 @@ export async function invoke<T>(cmd: string, args: Record<string, any> = {}): Pr
         return [...mockGroups] as any;
       }
 
+      case 'get_unused_group_colors': {
+        const used: string[] = Array.from(new Set(mockGroups.map(g => g.color)));
+        const all = ['#8A2BE2', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9', '#F0B27A', '#82E0AA', '#F1948A', '#85929E', '#E59866', '#73C6B6', '#D2B4DE', '#AED6F1', '#A3E4D7'];
+        return all.filter(c => !used.includes(c)) as any;
+      }
+
       case 'create_group': {
         const newGroup: GroupSummary = {
           group_id: `mock-group-${Date.now()}`,
@@ -285,6 +292,44 @@ export async function invoke<T>(cmd: string, args: Record<string, any> = {}): Pr
 
       case 'list_mini_entries': return [] as any;
       case 'list_mini_notes': return [] as any;
+
+      case 'export_vault': {
+        const data = JSON.stringify({ entries: mockDb, groups: mockGroups }, null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `sovereign-t-export-${Date.now()}.toaa`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return undefined as any;
+      }
+
+      case 'import_vault': {
+        const file = await new Promise<File | null>((resolve) => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.toaa,.json';
+          input.onchange = () => resolve(input.files?.[0] ?? null);
+          input.click();
+        });
+        if (!file) throw new Error('Import cancelled.');
+        // Try reading as JSON (mock export format), fallback to binary (real export format)
+        const text = await file.text().catch(() => '');
+        if (text.startsWith('{') || text.startsWith('[')) {
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed.entries) mockDb = parsed.entries;
+            if (parsed.groups) mockGroups = parsed.groups;
+            return undefined as any;
+          } catch { /* not JSON, fall through to binary */ }
+        }
+        // Binary .toaa — can't parse in mock, but don't crash
+        console.warn('[API Mock] Binary .toaa import not supported in browser mode. Use Tauri app.');
+        throw new Error('Import not supported in browser mode. Use the Tauri desktop app.');
+      }
 
       case 'copy_entry_secret':
       case 'copy_to_clipboard': {

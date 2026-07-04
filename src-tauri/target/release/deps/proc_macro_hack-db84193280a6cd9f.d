@@ -1,0 +1,9 @@
+C:\Users\jerwi\WINAPP PROJECTS\Sovereigni-T\src-tauri\target\release\deps\proc_macro_hack-db84193280a6cd9f.d: C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\lib.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\quote.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\error.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\iter.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\parse.rs
+
+C:\Users\jerwi\WINAPP PROJECTS\Sovereigni-T\src-tauri\target\release\deps\proc_macro_hack-db84193280a6cd9f.dll: C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\lib.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\quote.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\error.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\iter.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\parse.rs
+
+C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\lib.rs:
+C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\quote.rs:
+C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\error.rs:
+C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\iter.rs:
+C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\proc-macro-hack-0.5.20+deprecated\src\parse.rs:

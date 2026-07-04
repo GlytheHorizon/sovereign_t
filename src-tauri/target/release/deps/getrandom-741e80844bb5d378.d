@@ -1,0 +1,11 @@
+C:\Users\jerwi\WINAPP PROJECTS\Sovereigni-T\src-tauri\target\release\deps\getrandom-741e80844bb5d378.d: C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\lib.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\error.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\util.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\error_impls.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\windows.rs
+
+C:\Users\jerwi\WINAPP PROJECTS\Sovereigni-T\src-tauri\target\release\deps\libgetrandom-741e80844bb5d378.rlib: C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\lib.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\error.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\util.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\error_impls.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\windows.rs
+
+C:\Users\jerwi\WINAPP PROJECTS\Sovereigni-T\src-tauri\target\release\deps\libgetrandom-741e80844bb5d378.rmeta: C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\lib.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\error.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\util.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\error_impls.rs C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\windows.rs
+
+C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\lib.rs:
+C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\error.rs:
+C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\util.rs:
+C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\error_impls.rs:
+C:\Users\jerwi\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\getrandom-0.1.16\src\windows.rs:

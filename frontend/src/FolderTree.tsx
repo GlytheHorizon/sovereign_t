@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { EntrySummary, GroupSummary } from './api';
+import { EntrySummary, GroupSummary, invoke } from './api';
 import {
   Folder, FolderOpen, ChevronRight, ChevronDown,
   FileText, Trash2, Pencil, GitMerge, Plus,
@@ -42,6 +42,19 @@ const FolderTree: React.FC<FolderTreeProps> = ({
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupColor, setNewGroupColor] = useState('#8A2BE2');
   const [hoveredEntry, setHoveredEntry] = useState<string | null>(null);
+  const [availableColors, setAvailableColors] = useState<string[] | null>(null);
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    invoke<string[]>('get_unused_group_colors').then(colors => {
+      if (colors && colors.length > 0) {
+        setAvailableColors(colors);
+        setNewGroupColor(colors[0]);
+      }
+    }).catch(() => {});
+  }, []);
 
   const toggle = (id: string) => setExpandedGroups((p) => ({ ...p, [id]: !p[id] }));
   const uncategorized = entries.filter((e) => !e.group_id);
@@ -191,6 +204,20 @@ const FolderTree: React.FC<FolderTreeProps> = ({
           />
           <span className="tree-color-swatch" style={{ background: newGroupColor }} />
         </label>
+        {availableColors && availableColors.length > 0 && (
+          <div className="tree-color-suggestions">
+            {availableColors.slice(0, 6).map(c => (
+              <button
+                key={c}
+                type="button"
+                className={`tree-color-chip ${c === newGroupColor ? 'active' : ''}`}
+                style={{ background: c }}
+                onClick={() => setNewGroupColor(c)}
+                title={c}
+              />
+            ))}
+          </div>
+        )}
         <motion.button
           className="btn btn-primary"
           onClick={() => { if (newGroupName.trim()) { onCreateGroup(newGroupName.trim(), newGroupColor); setNewGroupName(''); } }}

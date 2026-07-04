@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Shield, Key, Info, User, CheckCircle2, XCircle, Eye, EyeOff, Cpu, Code, Zap, Download, Upload, FileJson, Lock } from 'lucide-react';
+import { Shield, Key, Info, User, CheckCircle2, XCircle, Eye, EyeOff, Cpu, Code, Zap, Download, Upload, FileJson, Lock, Sun, Moon, Clock, Monitor, Smartphone, Palette, Sliders, AlertTriangle, LogOut } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import { invoke } from './api';
+import { useTheme } from './ThemeContext';
+import { getSessionTimeout, setSessionTimeout } from './useSessionTimer';
 
 interface SettingsViewProps {
   onShowToast: (msg: string, type: 'success' | 'error') => void;
@@ -23,6 +25,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onLogout }) =>
   const [showAuthPassword, setShowAuthPassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
 
+  const [confirmAction, setConfirmAction] = useState<{ type: 'lock' } | null>(null);
   const [recoveryStep, setRecoveryStep] = useState<'confirm' | 'show' | null>(null);
   const [recoveryPassword, setRecoveryPassword] = useState('');
   const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
@@ -169,218 +172,338 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onLogout }) =>
     setShowRecoveryDoneConfirm(false);
   };
 
+  const [settingsTab, setSettingsTab] = useState<'security' | 'display' | 'backup' | 'advanced'>('security');
+  const { theme, toggle: toggleTheme } = useTheme();
+  const [sessionMinutes, setSessionMinutes] = useState(getSessionTimeout());
+
+  const handleSessionChange = (val: number) => {
+    setSessionMinutes(val);
+    setSessionTimeout(val);
+  };
+
   return (
     <div className="settings-view">
-      <div className="settings-layout-v2">
-        {/* Row 1: Primary Settings */}
-        <div className="settings-row">
-          {/* Change Password Container */}
-          <div className="settings-card flex-1">
-            <div className="card-header">
-              <Key size={20} className="card-icon" />
-              <div>
-                <h2 className="card-title">Security Settings</h2>
-                <p className="card-subtitle">Manage your vault's protection</p>
-              </div>
-            </div>
+      {/* Settings Tabs */}
+      <div className="settings-tabs" role="tablist" aria-label="Settings categories">
+        {[
+          { id: 'security' as const, label: 'Security', icon: <Shield size={15} /> },
+          { id: 'display' as const, label: 'Display', icon: <Palette size={15} /> },
+          { id: 'backup' as const, label: 'Backup', icon: <FileJson size={15} /> },
+          { id: 'advanced' as const, label: 'Advanced', icon: <Sliders size={15} /> },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            role="tab"
+            aria-selected={settingsTab === tab.id}
+            className={`settings-tab ${settingsTab === tab.id ? 'active' : ''}`}
+            onClick={() => setSettingsTab(tab.id)}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
 
-            <div className="settings-form-container">
-              <div className="settings-info-box">
-                <Shield size={16} />
-                <span>Changing your master password will re-encrypt your entire vault.</span>
-              </div>
+      <div className="settings-tab-content">
+        {/* ═══════ SECURITY TAB ═══════ */}
+        {settingsTab === 'security' && (
+          <div className="settings-layout-v2">
+            <div className="settings-row">
+              <div className="settings-card flex-1">
+                <div className="card-header">
+                  <Key size={20} className="card-icon" />
+                  <div>
+                    <h2 className="card-title">Master Password</h2>
+                    <p className="card-subtitle">Change or update your vault password</p>
+                  </div>
+                </div>
 
-              <form className="settings-form" onSubmit={handleChangePassword}>
-                <div className="form-group">
-                  <label className="form-label">Current Master Password</label>
-                  <div className="form-input-wrapper">
-                    <input
-                      type={showOldPassword ? "text" : "password"}
-                      className="form-input"
-                      value={oldPassword}
-                      onChange={(e) => setOldPassword(e.target.value)}
-                      placeholder="Required to authorize change"
-                      required
-                    />
-                    <button
-                      type="button"
-                      className="form-input-btn"
-                      onClick={() => setShowOldPassword(!showOldPassword)}
-                    >
-                      {showOldPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                <div className="settings-form-container">
+                  <div className="settings-info-box">
+                    <Shield size={16} />
+                    <span>Changing your master password will re-encrypt your entire vault.</span>
+                  </div>
+
+                  <form className="settings-form" onSubmit={handleChangePassword}>
+                    <div className="form-group">
+                      <label className="form-label">Current Master Password</label>
+                      <div className="form-input-wrapper">
+                        <input
+                          type={showOldPassword ? "text" : "password"}
+                          className="form-input"
+                          value={oldPassword}
+                          onChange={(e) => setOldPassword(e.target.value)}
+                          placeholder="Required to authorize change"
+                          required
+                        />
+                        <button
+                          type="button"
+                          className="form-input-btn"
+                          onClick={() => setShowOldPassword(!showOldPassword)}
+                        >
+                          {showOldPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group flex-1">
+                        <label className="form-label">New Master Password</label>
+                        <div className="form-input-wrapper">
+                          <input
+                            type={showNewPassword ? "text" : "password"}
+                            className="form-input"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="Min. 12 chars"
+                            required
+                          />
+                          <button
+                            type="button"
+                            className="form-input-btn"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                          >
+                            {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="form-group flex-1">
+                        <label className="form-label">Confirm New Password</label>
+                        <div className="form-input-wrapper">
+                          <input
+                            type={showConfirmPassword ? "text" : "password"}
+                            className="form-input"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="Repeat new password"
+                            required
+                          />
+                          <button
+                            type="button"
+                            className="form-input-btn"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          >
+                            {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
+                      {loading ? <span className="spinner" /> : (
+                        <>
+                          <Lock size={16} />
+                          Update Master Password
+                        </>
+                      )}
                     </button>
+                  </form>
+
+                  <div className="settings-divider" />
+
+                  <div className="settings-info-box">
+                    <Key size={16} />
+                    <span>Generate a new recovery key. It will be shown once.</span>
+                  </div>
+                  <button className="btn btn-ghost btn-full" onClick={openRecoveryModal}>
+                    Regenerate Recovery Key
+                  </button>
+                </div>
+              </div>
+
+              <div className="settings-card info-column">
+                <div className="card-header">
+                  <Info size={20} className="card-icon" />
+                  <div>
+                    <h2 className="card-title">System Information</h2>
+                    <p className="card-subtitle">Version and build details</p>
                   </div>
                 </div>
 
-                <div className="form-row">
-                  <div className="form-group flex-1">
-                    <label className="form-label">New Master Password</label>
-                    <div className="form-input-wrapper">
-                      <input
-                        type={showNewPassword ? "text" : "password"}
-                        className="form-input"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="Min. 12 chars"
-                        required
-                      />
-                      <button
-                        type="button"
-                        className="form-input-btn"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                      >
-                        {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
+                <div className="about-grid">
+                  <div className="about-item-v2">
+                    <User size={16} />
+                    <div className="about-item-content">
+                      <label>Developer</label>
+                      <span>Jerwin Cruz</span>
                     </div>
                   </div>
-
-                  <div className="form-group flex-1">
-                    <label className="form-label">Confirm New Password</label>
-                    <div className="form-input-wrapper">
-                      <input
-                        type={showConfirmPassword ? "text" : "password"}
-                        className="form-input"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Repeat new password"
-                        required
-                      />
-                      <button
-                        type="button"
-                        className="form-input-btn"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      >
-                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
+                  <div className="about-item-v2">
+                    <Shield size={16} />
+                    <div className="about-item-content">
+                      <label>Version</label>
+                      <span>V7.1 Beta</span>
+                    </div>
+                  </div>
+                  <div className="about-item-v2">
+                    <Shield size={16} />
+                    <div className="about-item-content">
+                      <label>Build</label>
+                      <span style={{ fontSize: '10px' }}>0704260544PMS</span>
+                    </div>
+                  </div>
+                  <div className="about-item-v2">
+                    <Cpu size={16} />
+                    <div className="about-item-content">
+                      <label>Core Stack</label>
+                      <span>Rust & Tauri</span>
+                    </div>
+                  </div>
+                  <div className="about-item-v2">
+                    <Zap size={16} />
+                    <div className="about-item-content">
+                      <label>Encryption</label>
+                      <span>AES-256-GCM</span>
+                    </div>
+                  </div>
+                  <div className="about-item-v2">
+                    <Shield size={16} />
+                    <div className="about-item-content">
+                      <label>Architecture</label>
+                      <span>Zero-Knowledge</span>
                     </div>
                   </div>
                 </div>
 
-                <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
-                  {loading ? <span className="spinner" /> : (
-                    <>
-                      <Lock size={16} />
-                      Update Master Password
-                    </>
-                  )}
-                </button>
-              </form>
-
-              <div className="settings-info-box" style={{ marginTop: 16 }}>
-                <Key size={16} />
-                <span>Generate a new recovery key. It will be shown once.</span>
-              </div>
-              <button className="btn btn-ghost btn-full" onClick={openRecoveryModal}>
-                Regenerate Recovery Key
-              </button>
-            </div>
-          </div>
-
-          {/* About / Info Container */}
-          <div className="settings-card info-column">
-            <div className="card-header">
-              <Info size={20} className="card-icon" />
-              <div>
-                <h2 className="card-title">System Information</h2>
-                <p className="card-subtitle">Version and build details</p>
-              </div>
-            </div>
-
-            <div className="about-grid">
-              <div className="about-item-v2">
-                <User size={16} />
-                <div className="about-item-content">
-                  <label>Developer</label>
-                  <span>Jerwin Cruz</span>
-                </div>
-              </div>
-              <div className="about-item-v2">
-                <Shield size={16} />
-                <div className="about-item-content">
-                  <label>Version</label>
-                  <span>V6.0 Stable</span>
-                </div>
-              </div>
-              <div className="about-item-v2">
-                <Shield size={16} />
-                <div className="about-item-content">
-                  <label>Build</label>
-                  <span style={{ fontSize: '10px' }}>0513260531PMS</span>
-                </div>
-              </div>
-              <div className="about-item-v2">
-                <Cpu size={16} />
-                <div className="about-item-content">
-                  <label>Core Stack</label>
-                  <span>Rust & Tauri</span>
-                </div>
-              </div>
-              <div className="about-item-v2">
-                <Zap size={16} />
-                <div className="about-item-content">
-                  <label>Encryption</label>
-                  <span>AES-256-GCM</span>
-                </div>
-              </div>
-              <div className="about-item-v2">
-                <Shield size={16} />
-                <div className="about-item-content">
-                  <label>Architecture</label>
+                <div className="tech-stack-pills">
+                  <span>React</span>
+                  <span>Vite</span>
+                  <span>SQLite</span>
                   <span>Zero-Knowledge</span>
                 </div>
               </div>
             </div>
+          </div>
+        )}
 
-            <div className="tech-stack-pills">
-              <span>React</span>
-              <span>Vite</span>
-              <span>SQLite</span>
-              <span>Zero-Knowledge</span>
+        {/* ═══════ DISPLAY TAB ═══════ */}
+        {settingsTab === 'display' && (
+          <div className="settings-layout-v2">
+            <div className="settings-card">
+              <div className="card-header">
+                <Palette size={20} className="card-icon" />
+                <div>
+                  <h2 className="card-title">Appearance</h2>
+                  <p className="card-subtitle">Customize the vault interface</p>
+                </div>
+              </div>
+
+              <div className="display-settings-grid">
+                <div className="display-setting-row">
+                  <div className="display-setting-info">
+                    <Sun size={16} />
+                    <div>
+                      <div className="display-setting-label">Theme</div>
+                      <div className="display-setting-desc">Switch between dark and light mode</div>
+                    </div>
+                  </div>
+                  <button className="btn btn-ghost" onClick={toggleTheme}>
+                    {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                    Switch to {theme === 'dark' ? 'Light' : 'Dark'}
+                  </button>
+                </div>
+
+                <div className="display-setting-row">
+                  <div className="display-setting-info">
+                    <Clock size={16} />
+                    <div>
+                      <div className="display-setting-label">Auto-lock Timer</div>
+                      <div className="display-setting-desc">Lock vault after inactivity</div>
+                    </div>
+                  </div>
+                  <select
+                    className="settings-select"
+                    value={sessionMinutes}
+                    onChange={(e) => handleSessionChange(Number(e.target.value))}
+                    aria-label="Auto-lock timeout"
+                  >
+                    <option value={1}>1 minute</option>
+                    <option value={2}>2 minutes</option>
+                    <option value={5}>5 minutes</option>
+                    <option value={10}>10 minutes</option>
+                    <option value={15}>15 minutes</option>
+                    <option value={30}>30 minutes</option>
+                    <option value={60}>60 minutes</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Row 2: Data Management - Separate Container */}
-        <div className="settings-card data-management-section">
-          <div className="card-header">
-            <FileJson size={20} className="card-icon" />
-            <div>
-              <h2 className="card-title">Data Portability</h2>
-              <p className="card-subtitle">Export or import your entire vault</p>
-            </div>
-          </div>
-
-          <div className="data-management-grid">
-            <div className="data-info-text">
-              <p>
-                Maintain total control over your data. You can export your entire vault (including Mini Vault)
-                to a secure <b>.toaa</b> file for backup, or import data from an existing backup.
-              </p>
-              <div className="data-warning-box">
-                <Info size={14} />
-                <span>Importing will overwrite your current vault data.</span>
+        {/* ═══════ BACKUP TAB ═══════ */}
+        {settingsTab === 'backup' && (
+          <div className="settings-card data-management-section">
+            <div className="card-header">
+              <FileJson size={20} className="card-icon" />
+              <div>
+                <h2 className="card-title">Data Portability</h2>
+                <p className="card-subtitle">Export or import your entire vault</p>
               </div>
             </div>
 
-            <div className="data-action-buttons">
-              <button className="btn btn-export" onClick={() => setShowAuthModal('export')}>
-                <Download size={18} />
-                <div className="btn-text-stack">
-                  <span className="btn-label">Export Vault</span>
-                  <span className="btn-sub">Save as .toaa backup</span>
+            <div className="data-management-grid">
+              <div className="data-info-text">
+                <p>
+                  Maintain total control over your data. You can export your entire vault (including Mini Vault)
+                  to a secure <b>.toaa</b> file for backup, or import data from an existing backup.
+                </p>
+                <div className="data-warning-box">
+                  <AlertTriangle size={14} />
+                  <span>Importing will overwrite your current vault data.</span>
                 </div>
-              </button>
+              </div>
 
-              <button className="btn btn-import" onClick={() => setShowAuthModal('import')}>
-                <Upload size={18} />
-                <div className="btn-text-stack">
-                  <span className="btn-label">Import Vault</span>
-                  <span className="btn-sub">Restore from backup</span>
-                </div>
-              </button>
+              <div className="data-action-buttons">
+                <button className="btn btn-export" onClick={() => setShowAuthModal('export')}>
+                  <Download size={18} />
+                  <div className="btn-text-stack">
+                    <span className="btn-label">Export Vault</span>
+                    <span className="btn-sub">Save as .toaa backup</span>
+                  </div>
+                </button>
+
+                <button className="btn btn-import" onClick={() => setShowAuthModal('import')}>
+                  <Upload size={18} />
+                  <div className="btn-text-stack">
+                    <span className="btn-label">Import Vault</span>
+                    <span className="btn-sub">Restore from backup</span>
+                  </div>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* ═══════ ADVANCED TAB ═══════ */}
+        {settingsTab === 'advanced' && (
+          <div className="settings-layout-v2">
+            <div className="settings-card">
+              <div className="card-header">
+                <Sliders size={20} className="card-icon" />
+                <div>
+                  <h2 className="card-title">Advanced Settings</h2>
+                  <p className="card-subtitle">Power user configuration</p>
+                </div>
+              </div>
+
+              <div className="display-settings-grid">
+                <div className="display-setting-row">
+                  <div className="display-setting-info">
+                    <LogOut size={16} />
+                    <div>
+                      <div className="display-setting-label">Lock Vault</div>
+                      <div className="display-setting-desc">Immediately lock and secure your vault</div>
+                    </div>
+                  </div>
+                  <button className="btn btn-danger" onClick={() => setConfirmAction({ type: 'lock' })}>
+                    <Lock size={14} /> Lock Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Master Password Confirmation Modal */}
@@ -541,6 +664,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onLogout }) =>
           cancelText="Cancel"
           onConfirm={confirmGenerateRecovery}
           onCancel={cancelGenerateRecovery}
+        />
+      )}
+
+      {confirmAction && confirmAction.type === 'lock' && (
+        <ConfirmModal
+          title="Lock Vault"
+          message="Your session will be ended and the vault will be locked."
+          confirmText="Lock Vault"
+          danger
+          onConfirm={() => { setConfirmAction(null); onLogout(); }}
+          onCancel={() => setConfirmAction(null)}
         />
       )}
     </div>

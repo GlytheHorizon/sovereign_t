@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Folder, Star, Trash2, Lock, Shield, Network,
   LayoutDashboard, Settings, Zap, Brain, Ghost, QrCode,
+  ChevronLeft, ChevronRight, History, Unlock,
 } from 'lucide-react';
 
 export type Section = 'dashboard' | 'all' | 'favorites' | 'tree' | 'trash' | 'settings' | 'mini_vault' | 'intelligence' | 'decoy';
@@ -14,6 +15,8 @@ interface SidebarProps {
   healthScore?: number;
   onLock: () => void;
   isGhostMode?: boolean;
+  recentActivity?: { action: string; time: string }[];
+  vaultStatus?: 'locked' | 'unlocked' | 'synced';
 }
 
 const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
@@ -27,9 +30,24 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
   { id: 'mini_vault', label: 'Mini Vault',   icon: <Shield size={17} /> },
 ];
 
-const Sidebar: React.FC<SidebarProps> = React.memo(({ section, onSectionChange, counts, healthScore, onLock, isGhostMode }) => {
+const RECENT_MAX = 5;
+
+const Sidebar: React.FC<SidebarProps> = React.memo(({ section, onSectionChange, counts, healthScore, onLock, isGhostMode, recentActivity, vaultStatus }) => {
+  const recentItems = useMemo(() => (recentActivity || []).slice(0, RECENT_MAX), [recentActivity]);
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''}`}>
+      {/* Collapse toggle */}
+      <button
+        className="sidebar-collapse-btn"
+        onClick={() => setCollapsed(v => !v)}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+      </button>
+
       {/* Brand */}
       <div className="sidebar-header" data-tauri-drag-region>
         <div className="sidebar-brand">
@@ -41,26 +59,27 @@ const Sidebar: React.FC<SidebarProps> = React.memo(({ section, onSectionChange, 
             />
             <img src="/stv2.png" alt="Sovereign_T" className="sidebar-logo-img" />
           </div>
-          <div>
-            <div className="sidebar-brand-text">Sovereign_T</div>
-            <div className="sidebar-brand-sub">Cyber Vault · Local‑First</div>
-          </div>
+          {!collapsed && (
+            <div>
+              <div className="sidebar-brand-text">Sovereign_T</div>
+              <div className="sidebar-brand-sub">Cyber Vault · Local‑First</div>
+            </div>
+          )}
         </div>
 
-        {/* Vault status indicator */}
         <div className="sidebar-vault-status">
           <motion.span
             className="vault-status-dot"
             animate={{ opacity: [1, 0.3, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
-          <span className="vault-status-label">Encrypted</span>
+          {!collapsed && <span className="vault-status-label">Encrypted</span>}
           <Zap size={10} className="vault-status-zap" />
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="sidebar-nav">
+      <nav className="sidebar-nav" aria-label="Main navigation">
         {NAV_ITEMS.filter(item => {
           if (isGhostMode && item.id === 'decoy') return false;
           return true;
@@ -73,9 +92,11 @@ const Sidebar: React.FC<SidebarProps> = React.memo(({ section, onSectionChange, 
               id={`nav-${item.id}`}
               className={`sidebar-link ${isActive ? 'active' : ''}`}
               onClick={() => onSectionChange(item.id)}
-              whileHover={{ x: 3 }}
+              whileHover={{ x: collapsed ? 0 : 3 }}
               whileTap={{ scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              aria-label={item.label}
+              aria-current={isActive ? 'page' : undefined}
             >
               {isActive && (
                 <motion.div
@@ -85,9 +106,9 @@ const Sidebar: React.FC<SidebarProps> = React.memo(({ section, onSectionChange, 
                 />
               )}
               <span className="sidebar-link-icon">{item.icon}</span>
-              <span className="sidebar-link-label">{item.label}</span>
+              {!collapsed && <span className="sidebar-link-label">{item.label}</span>}
               <AnimatePresence>
-                {count !== undefined && count > 0 && (
+                {!collapsed && count !== undefined && count > 0 && (
                   <motion.span
                     className="sidebar-link-count"
                     initial={{ scale: 0.7, opacity: 0 }}
@@ -103,12 +124,34 @@ const Sidebar: React.FC<SidebarProps> = React.memo(({ section, onSectionChange, 
         })}
       </nav>
 
+      {/* Recent activity */}
+      {!collapsed && recentItems.length > 0 && (
+        <div className="recent-activity">
+          <div className="recent-activity-title"><History size={10} /> Recent Activity</div>
+          <div className="recent-activity-list">
+            {recentItems.map((r, i) => (
+              <div key={i} className="recent-activity-item">
+                <Zap size={10} /> {r.action}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Status badge */}
+      {!collapsed && vaultStatus && (
+        <div className={`sidebar-status-badge ${vaultStatus}`}>
+          <Unlock size={10} />
+          <span>{vaultStatus === 'unlocked' ? 'Vault Open' : vaultStatus === 'locked' ? 'Locked' : 'Synced'}</span>
+        </div>
+      )}
+
       {/* Section divider */}
       <div className="sidebar-divider" />
 
       {/* Footer */}
       <div className="sidebar-footer">
-        {healthScore !== undefined && (
+        {!collapsed && healthScore !== undefined && (
           <div className="sidebar-health-widget">
             <div className="sidebar-health-info">
               <span className="sidebar-health-label">Security Health</span>
@@ -133,28 +176,32 @@ const Sidebar: React.FC<SidebarProps> = React.memo(({ section, onSectionChange, 
           id="settings-btn"
           className={`sidebar-footer-btn ${section === 'settings' ? 'active' : ''}`}
           onClick={() => onSectionChange('settings')}
-          whileHover={{ x: 3 }}
+          whileHover={{ x: collapsed ? 0 : 3 }}
           whileTap={{ scale: 0.97 }}
+          aria-label="Settings"
         >
           <span className="sidebar-link-icon"><Settings size={17} /></span>
-          Settings
+          {!collapsed && 'Settings'}
         </motion.button>
 
         <motion.button
           id="lock-vault-btn"
           className="sidebar-footer-btn lock"
           onClick={onLock}
-          whileHover={{ x: 3 }}
+          whileHover={{ x: collapsed ? 0 : 3 }}
           whileTap={{ scale: 0.97 }}
+          aria-label="Lock vault"
         >
           <span className="sidebar-link-icon"><Lock size={17} /></span>
-          Lock Vault
+          {!collapsed && 'Lock Vault'}
         </motion.button>
 
-        <div className="sidebar-security-badge">
-          <Shield size={10} />
-          <span>AES-256 · Argon2 · Local-Only</span>
-        </div>
+        {!collapsed && (
+          <div className="sidebar-security-badge">
+            <Shield size={10} />
+            <span>AES-256 · Argon2 · Local-Only</span>
+          </div>
+        )}
       </div>
     </aside>
   );

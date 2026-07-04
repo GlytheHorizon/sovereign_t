@@ -7,8 +7,10 @@ use crate::crypto::{aad_for_entry, derive_master_key, encrypt_field, generate_sa
 use crate::db::{EncryptedSecrets, EntryFilter, EntrySummary, GroupSummary, NewEntryEncrypted, NewGroup, UpdateEntryEncrypted, VaultDb};
 use arboard::Clipboard;
 use chrono::Local;
+use hmac::{Hmac, Mac};
 use rand::{rngs::OsRng, seq::SliceRandom};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -28,6 +30,32 @@ const MASTER_PASSWORD_MIN: usize = 12;
 const MASTER_PASSWORD_MAX: usize = 1024;
 const GENERATED_PASSWORD_MIN: usize = 12;
 const GENERATED_PASSWORD_MAX: usize = 32;
+
+const HMAC_TAG_LEN: usize = 32;
+
+const ALL_GROUP_COLORS: &[&str] = &[
+    "#8A2BE2", "#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4",
+    "#FFEAA7", "#DDA0DD", "#98D8C8", "#F7DC6F", "#BB8FCE",
+    "#85C1E9", "#F0B27A", "#82E0AA", "#F1948A", "#85929E",
+    "#E59866", "#73C6B6", "#D2B4DE", "#AED6F1", "#A3E4D7",
+];
+
+fn derive_hmac_key(password: &str, salt: &[u8]) -> [u8; HMAC_TAG_LEN] {
+    use sha2::Digest;
+    let mut hasher = Sha256::new();
+    hasher.update(password.as_bytes());
+    hasher.update(salt);
+    let result = hasher.finalize();
+    let mut key = [0u8; HMAC_TAG_LEN];
+    key.copy_from_slice(&result);
+    key
+}
+
+fn compute_hmac_tag(data: &[u8], hmac_key: &[u8; HMAC_TAG_LEN]) -> Vec<u8> {
+    let mut mac = Hmac::<Sha256>::new_from_slice(hmac_key).expect("HMAC key length ok");
+    mac.update(data);
+    mac.finalize().into_bytes().to_vec()
+}
 
 #[derive(Debug, Serialize)]
 struct AppError {
@@ -81,6 +109,40 @@ impl From<serde_json::Error> for AppError {
 
 type CommandResult<T> = Result<T, AppError>;
 
+struct AuthRateLimiter {
+    consecutive_failures: Mutex<u32>,
+    last_attempt: Mutex<Instant>,
+}
+
+impl AuthRateLimiter {
+    fn new() -> Self {
+        Self {
+            consecutive_failures: Mutex::new(0),
+            last_attempt: Mutex::new(Instant::now()),
+        }
+    }
+
+    fn check(&self) {
+        let failures = *self.consecutive_failures.lock().unwrap();
+        if failures >= 3 {
+            let delay = std::cmp::min(1u64 << (failures - 3), 30);
+            let elapsed = self.last_attempt.lock().unwrap().elapsed();
+            if elapsed < Duration::from_secs(delay) {
+                std::thread::sleep(Duration::from_secs(delay) - elapsed);
+            }
+        }
+    }
+
+    fn record_failure(&self) {
+        *self.consecutive_failures.lock().unwrap() += 1;
+        *self.last_attempt.lock().unwrap() = Instant::now();
+    }
+
+    fn record_success(&self) {
+        *self.consecutive_failures.lock().unwrap() = 0;
+    }
+}
+
 struct AppState {
     app_data_dir: PathBuf,
     active_vault: Mutex<String>,
@@ -89,6 +151,7 @@ struct AppState {
     recovery_path: Mutex<PathBuf>,
     session: Mutex<Option<Session>>,
     mini_vault_unlocked: Mutex<bool>,
+    rate_limiter: AuthRateLimiter,
 }
 
 struct Session {
@@ -302,6 +365,16 @@ enum VaultSection {
 
 
 #[tauri::command]
+fn get_unused_group_colors(state: State<AppState>) -> CommandResult<Vec<String>> {
+    let db = state.db.lock().map_err(|_| AppError::new("err", ""))?;
+    with_session(&state, |key| {
+        let groups = db.list_groups(key)?;
+        let used_colors: Vec<String> = groups.iter().map(|g| g.color.clone()).collect();
+        Ok(ALL_GROUP_COLORS.iter().filter(|c| !used_colors.iter().any(|u| u == *c)).map(|c| c.to_string()).collect())
+    })
+}
+
+#[tauri::command]
 async fn get_decoy_status(state: State<'_, AppState>) -> CommandResult<DecoyStatus> {
     let session_guard = state.session.lock().unwrap();
     let session = session_guard.as_ref().ok_or_else(|| AppError::new("unauthorized", "Session expired"))?;
@@ -326,6 +399,9 @@ async fn set_decoy_protocol(state: State<'_, AppState>, input: SetDecoyInput) ->
         let key = derive_master_key(&pw, &salt)?;
         
         let decoy_path = state.app_data_dir.join("decoy.db");
+        if decoy_path.exists() {
+            let _ = fs::remove_file(&decoy_path);
+        }
         let db_decoy = VaultDb::new(decoy_path);
         db_decoy.create_new(&key).map_err(AppError::from)?;
         
@@ -379,17 +455,16 @@ async fn set_decoy_protocol(state: State<'_, AppState>, input: SetDecoyInput) ->
             db_decoy.insert_entry(&key, entry).map_err(AppError::from)?;
         }
 
-        // Create a lightweight marker for instant routing
-        let marker_path = state.app_data_dir.join("ghost.marker");
-        fs::write(marker_path, b"armed")?;
+        // Create a lightweight marker for instant routing (cloaked inside encrypted meta table)
+        db_decoy.set_meta_val(&key, "ghost_mode", "armed")?;
+        db.set_meta_val(&session.key, "ghost_mode", "armed")?;
 
-        db.set_meta_val(&session.key, "decoy_hash", "enabled").map_err(AppError::from)?;
+        db.set_meta_val(&session.key, "decoy_hash", "enabled")?;
     } else {
         let decoy_path = state.app_data_dir.join("decoy.db");
-        let marker_path = state.app_data_dir.join("ghost.marker");
         if decoy_path.exists() { let _ = fs::remove_file(decoy_path); }
-        if marker_path.exists() { let _ = fs::remove_file(marker_path); }
-        db.delete_meta_val(&session.key, "decoy_hash").map_err(AppError::from)?;
+        db.delete_meta_val(&session.key, "ghost_mode")?;
+        db.delete_meta_val(&session.key, "decoy_hash")?;
     }
     Ok(())
 }
@@ -420,14 +495,21 @@ async fn export_vault(state: State<'_, AppState>, password: String) -> CommandRe
         .await;
 
     if let Some(file_handle) = path {
-        let salt = fs::read(salt_path)?;
-        let db_content = fs::read(db_path)?;
+        let salt = fs::read(&salt_path)?;
+        let db_content = fs::read(&db_path)?;
 
         let mut combined = Vec::with_capacity(salt.len() + db_content.len());
         combined.extend_from_slice(&salt);
         combined.extend_from_slice(&db_content);
 
-        fs::write(file_handle.path(), combined)?;
+        // HMAC-SHA256 integrity tag over salt+db_content
+        let hmac_key = derive_hmac_key(&password, &salt);
+        let tag = compute_hmac_tag(&combined, &hmac_key);
+        // Format: [salt (16)][db_content (N)][hmac_tag (32)]
+        let mut export_data = combined;
+        export_data.extend_from_slice(&tag);
+
+        fs::write(file_handle.path(), export_data)?;
         Ok(())
     } else {
         Err(AppError::new("cancelled", "Export cancelled."))
@@ -450,18 +532,58 @@ async fn import_vault(state: State<'_, AppState>, password: String) -> CommandRe
         .await;
 
     if let Some(file_handle) = path {
-        let combined = fs::read(file_handle.path())?;
-        if combined.len() <= crate::crypto::SALT_LEN {
+        let export_bytes = fs::read(file_handle.path())?;
+        if export_bytes.len() <= SALT_LEN {
             return Err(AppError::new("invalid_file", "The imported file is invalid or corrupted."));
         }
 
-        let (salt, db_content) = combined.split_at(crate::crypto::SALT_LEN);
-        
-        // Logout first to ensure no DB connections are active
-        clear_session(&state);
+        // Try new format: [salt (16)][db_content (N)][hmac_tag (32)]
+        if export_bytes.len() > SALT_LEN + HMAC_TAG_LEN {
+            let tag_start = export_bytes.len() - HMAC_TAG_LEN;
+            let (payload, tag) = export_bytes.split_at(tag_start);
+            let (salt, db_content) = payload.split_at(SALT_LEN);
 
-        fs::write(salt_path, salt)?;
-        fs::write(db_path, db_content)?;
+            let hmac_key = derive_hmac_key(&password, &salt);
+            let expected_tag = compute_hmac_tag(payload, &hmac_key);
+            if tag == expected_tag.as_slice() {
+                // New format verified — use it
+                clear_session(&state);
+                fs::write(&salt_path, salt)?;
+                fs::write(&db_path, db_content)?;
+
+                // Clear decoy database and flags
+                let new_key = derive_master_key(&password, salt)?;
+                let db_imported = VaultDb::new(db_path.clone());
+                let _ = db_imported.delete_meta_val(&new_key, "ghost_mode");
+                let _ = db_imported.delete_meta_val(&new_key, "decoy_hash");
+                let decoy_path = state.app_data_dir.join("decoy.db");
+                if decoy_path.exists() {
+                    let _ = fs::remove_file(decoy_path);
+                }
+
+                return Ok(());
+            }
+        }
+
+        // Fallback: old format [salt (16)][db_content (N)] — no HMAC tag
+        let (salt, db_content) = export_bytes.split_at(SALT_LEN);
+        if db_content.is_empty() {
+            return Err(AppError::new("invalid_file", "The imported file is invalid or corrupted."));
+        }
+
+        clear_session(&state);
+        fs::write(&salt_path, salt)?;
+        fs::write(&db_path, db_content)?;
+
+        // Clear decoy database and flags
+        let new_key = derive_master_key(&password, salt)?;
+        let db_imported = VaultDb::new(db_path.clone());
+        let _ = db_imported.delete_meta_val(&new_key, "ghost_mode");
+        let _ = db_imported.delete_meta_val(&new_key, "decoy_hash");
+        let decoy_path = state.app_data_dir.join("decoy.db");
+        if decoy_path.exists() {
+            let _ = fs::remove_file(decoy_path);
+        }
 
         Ok(())
     } else {
@@ -664,11 +786,13 @@ fn vault_exists(state: State<AppState>) -> bool {
 
 #[tauri::command]
 fn create_vault(state: State<AppState>, input: CreateVaultInput) -> CommandResult<RecoveryKeyResponse> {
+    state.rate_limiter.check();
     let db = state.db.lock().map_err(|_| AppError::new("state_error", ""))?;
     let salt_path = state.salt_path.lock().map_err(|_| AppError::new("state_error", ""))?;
     let recovery_path = state.recovery_path.lock().map_err(|_| AppError::new("state_error", ""))?;
 
     if db.path().exists() || salt_path.exists() {
+        state.rate_limiter.record_failure();
         return Err(AppError::new("vault_exists", "Vault already exists."));
     }
 
@@ -690,6 +814,10 @@ fn create_vault(state: State<AppState>, input: CreateVaultInput) -> CommandResul
     password.zeroize();
 
     db.create_new(&key)?;
+    let decoy_path = state.app_data_dir.join("decoy.db");
+    if decoy_path.exists() {
+        let _ = fs::remove_file(decoy_path);
+    }
     let now = now_epoch();
     let _ = db.log_event(&key, "vault_created", "vault", now);
 
@@ -719,11 +847,10 @@ fn create_vault(state: State<AppState>, input: CreateVaultInput) -> CommandResul
 
 #[tauri::command]
 fn unlock_vault(state: State<AppState>, input: UnlockVaultInput) -> CommandResult<()> {
+    state.rate_limiter.check();
     let mut db_handle = state.db.lock().map_err(|_| AppError::new("state_error", ""))?;
     let mut active_vault_name = state.active_vault.lock().unwrap().clone();
     
-    // Safety check: If we were in Ghost Mode, we need to reset to the primary vault file.
-    // We assume "vault" is the primary name unless it was specifically switched.
     if active_vault_name == "Ghost Mode" {
         active_vault_name = "vault".to_string();
     }
@@ -739,40 +866,61 @@ fn unlock_vault(state: State<AppState>, input: UnlockVaultInput) -> CommandResul
 
     let salt = fs::read(&salt_path)?;
     let key = derive_master_key(&input.password, &salt)?;
-    
-    // Check for Ghost Marker
-    let marker_path = state.app_data_dir.join("ghost.marker");
-    if marker_path.exists() {
-        let decoy_path = state.app_data_dir.join("decoy.db");
+    let decoy_path = state.app_data_dir.join("decoy.db");
+
+    // Try main vault first
+    if let Ok(()) = db_handle.verify_key(&key) {
+        // Check cloaked ghost marker in main vault's meta table
+        let ghost_armed = db_handle.get_meta_val(&key, "ghost_mode")
+            .ok()
+            .flatten()
+            .map(|v| v == "armed")
+            .unwrap_or(false);
+
+        if ghost_armed && decoy_path.exists() {
+            let db_decoy = VaultDb::new(decoy_path);
+            if let Ok(()) = db_decoy.verify_key(&key) {
+                // Shadow route to decoy
+                *db_handle = db_decoy;
+                let mut active_vault = state.active_vault.lock().unwrap();
+                *active_vault = "Ghost Mode".to_string();
+                let mut guard = state.session.lock().unwrap();
+                *guard = Some(Session::new(key));
+                state.rate_limiter.record_success();
+                return Ok(());
+            }
+        }
+
+        let now = now_epoch();
+        let _ = db_handle.log_event(&key, "vault_unlocked", "vault", now);
+        let mut active_vault_state = state.active_vault.lock().unwrap();
+        *active_vault_state = active_vault_name;
+        let mut guard = state.session.lock().unwrap();
+        *guard = Some(Session::new(key));
+        state.rate_limiter.record_success();
+        return Ok(());
+    }
+
+    // Main vault didn't open. Try decoy directly.
+    if decoy_path.exists() {
         let db_decoy = VaultDb::new(decoy_path);
-        if let Ok(_) = db_decoy.verify_key(&key) {
-             // Shadow Routing
-            *db_handle = db_decoy;
-            let mut active_vault = state.active_vault.lock().unwrap();
-            *active_vault = "Ghost Mode".to_string();
-            
-            let mut guard = state.session.lock().unwrap();
-            *guard = Some(Session::new(key));
-            return Ok(());
+        if let Ok(()) = db_decoy.verify_key(&key) {
+            if let Ok(Some(mode)) = db_decoy.get_meta_val(&key, "ghost_mode") {
+                if mode == "armed" {
+                    *db_handle = db_decoy;
+                    let mut active_vault = state.active_vault.lock().unwrap();
+                    *active_vault = "Ghost Mode".to_string();
+                    let mut guard = state.session.lock().unwrap();
+                    *guard = Some(Session::new(key));
+                    state.rate_limiter.record_success();
+                    return Ok(());
+                }
+            }
         }
     }
 
-    // Attempt real vault
-    match db_handle.verify_key(&key) {
-        Ok(_) => {
-            let now = now_epoch();
-            let _ = db_handle.log_event(&key, "vault_unlocked", "vault", now);
-            
-            // Sync the active vault name back to the state (resets from Ghost Mode if needed)
-            let mut active_vault_state = state.active_vault.lock().unwrap();
-            *active_vault_state = active_vault_name;
-            
-            let mut guard = state.session.lock().unwrap();
-            *guard = Some(Session::new(key));
-            Ok(())
-        }
-        Err(_) => Err(AppError::new("auth_failed", "Invalid master password."))
-    }
+    state.rate_limiter.record_failure();
+    Err(AppError::new("auth_failed", "Invalid master password."))
 }
 
 #[tauri::command]
@@ -780,14 +928,20 @@ fn unlock_vault_with_recovery(
     state: State<AppState>,
     input: UnlockVaultWithRecoveryInput,
 ) -> CommandResult<RecoveryKeyResponse> {
+    state.rate_limiter.check();
     let db = state.db.lock().map_err(|_| AppError::new("state_error", ""))?;
     let recovery_path = state.recovery_path.lock().map_err(|_| AppError::new("state_error", ""))?;
 
     let recovery_key_input = normalize_recovery_key(&input.recovery_key);
     validate_len("recovery_key", &recovery_key_input, 10, 64)?;
 
-    let recovery_bytes = fs::read(&*recovery_path)
-        .map_err(|_| AppError::new("recovery_missing", "Recovery key is not configured."))?;
+    let recovery_bytes = match fs::read(&*recovery_path) {
+        Ok(b) => b,
+        Err(_) => {
+            state.rate_limiter.record_failure();
+            return Err(AppError::new("recovery_missing", "Recovery key is not configured."));
+        }
+    };
     let recovery_data: RecoveryData = serde_json::from_slice(&recovery_bytes)
         .map_err(|_| AppError::new("recovery_invalid", "Recovery key data invalid."))?;
 
@@ -798,6 +952,7 @@ fn unlock_vault_with_recovery(
 
     let ok = crypto::verify_recovery_phrase(&recovery_key_input, &recovery_salt, &expected_hash)?;
     if !ok {
+        state.rate_limiter.record_failure();
         return Err(AppError::new("recovery_invalid", "Recovery key is invalid."));
     }
 
@@ -814,7 +969,10 @@ fn unlock_vault_with_recovery(
     let mut key_bytes = [0u8; crypto::KEY_LEN];
     key_bytes.copy_from_slice(&plain_key);
     let master_key = SecretKey::from_bytes(key_bytes);
-    db.verify_key(&master_key)?;
+    if db.verify_key(&master_key).is_err() {
+        state.rate_limiter.record_failure();
+        return Err(AppError::new("auth_failed", "Invalid master password."));
+    }
 
     let now = now_epoch();
     let _ = db.log_event(&master_key, "vault_unlocked", "vault", now);
@@ -838,6 +996,7 @@ fn unlock_vault_with_recovery(
         AppError::new("state_error", "Session state is unavailable.")
     })?;
     *guard = Some(Session::new(master_key));
+    state.rate_limiter.record_success();
     Ok(RecoveryKeyResponse {
         phrase: recovery_code,
     })
@@ -933,6 +1092,14 @@ fn change_master_password(state: State<AppState>, input: ChangeMasterPasswordInp
 
     // 5. Update salt file
     fs::write(&*salt_path, new_salt)?;
+
+    // Clear decoy protocol since the salt changed
+    let _ = db.delete_meta_val(&new_key, "ghost_mode");
+    let _ = db.delete_meta_val(&new_key, "decoy_hash");
+    let decoy_path = state.app_data_dir.join("decoy.db");
+    if decoy_path.exists() {
+        let _ = fs::remove_file(decoy_path);
+    }
 
     // 6. Update session
     let mut guard = state.session.lock().map_err(|_| AppError::new("state_error", ""))?;
@@ -1351,6 +1518,8 @@ fn add_entry(state: State<AppState>, input: NewEntryInput) -> CommandResult<Entr
         )?;
         let notes_field = encrypt_field(notes.as_bytes(), key, &aad_for_entry(&entry_id, "notes"))?;
 
+        let (risk_score, _) = compute_password_risk(&password, false);
+
         password.zeroize();
         notes.zeroize();
 
@@ -1381,6 +1550,7 @@ fn add_entry(state: State<AppState>, input: NewEntryInput) -> CommandResult<Entr
             trashed: false,
             created_at: now,
             updated_at: now,
+            risk_score,
         })
     })
 }
@@ -1786,11 +1956,12 @@ fn get_mini_vault_status(state: State<AppState>) -> CommandResult<MiniVaultStatu
     let session = session_guard.as_ref().ok_or_else(|| AppError::new("locked", "Vault is locked."))?;
     let db = state.db.lock().map_err(|_| AppError::new("state_error", ""))?;
     
-    let pin_hash = db.get_mini_config(&session.key, "pin_hash")?;
+    let pin_configured = db.get_mini_config(&session.key, "pin_hash")?.is_some()
+        || db.get_mini_config(&session.key, "pin_salt")?.is_some();
     let unlocked = *state.mini_vault_unlocked.lock().unwrap();
     
     Ok(MiniVaultStatus {
-        is_setup: pin_hash.is_some(),
+        is_setup: pin_configured,
         is_unlocked: unlocked,
     })
 }
@@ -1800,27 +1971,53 @@ fn setup_mini_vault(state: State<AppState>, input: MiniPinInput) -> CommandResul
     let session_guard = state.session.lock().map_err(|_| AppError::new("state_error", ""))?;
     let session = session_guard.as_ref().ok_or_else(|| AppError::new("locked", "Vault is locked."))?;
     let db = state.db.lock().map_err(|_| AppError::new("state_error", ""))?;
-    
-    // In a real app we'd hash the PIN, but for simplicity we'll just store it 
-    // (it's already inside an encrypted SQLCipher DB anyway)
-    db.set_mini_config(&session.key, "pin_hash", &input.pin)?;
+
+    if input.pin.len() < 4 || input.pin.len() > 32 {
+        return Err(AppError::new("invalid_input", "PIN must be between 4 and 32 characters."));
+    }
+
+    let pin_salt = generate_salt();
+    let pin_hash = crypto::hash_mini_pin(&input.pin, &pin_salt)
+        .map_err(|_| AppError::new("crypto_error", "Failed to hash PIN."))?;
+
+    db.set_mini_config(&session.key, "pin_salt", &hex::encode(pin_salt))?;
+    db.set_mini_config(&session.key, "pin_hash", &hex::encode(pin_hash))?;
     *state.mini_vault_unlocked.lock().unwrap() = true;
     Ok(())
 }
 
 #[tauri::command]
 fn unlock_mini_vault(state: State<AppState>, input: MiniPinInput) -> CommandResult<()> {
+    state.rate_limiter.check();
     let session_guard = state.session.lock().map_err(|_| AppError::new("state_error", ""))?;
     let session = session_guard.as_ref().ok_or_else(|| AppError::new("locked", "Vault is locked."))?;
     let db = state.db.lock().map_err(|_| AppError::new("state_error", ""))?;
-    
-    let pin_hash = db.get_mini_config(&session.key, "pin_hash")?
+
+    let stored_hash_hex = db.get_mini_config(&session.key, "pin_hash")?
         .ok_or_else(|| AppError::new("not_setup", "Mini vault is not setup."))?;
-    
-    if pin_hash == input.pin {
+
+    // Check if this is new format (Argon2 hash with salt) or old format (plaintext)
+    let pin_salt_hex = db.get_mini_config(&session.key, "pin_salt")?;
+    let pin_ok = if let Some(ref salt_hex) = pin_salt_hex {
+        // New format: Argon2-hashed PIN
+        let pin_salt = hex::decode(salt_hex)
+            .map_err(|_| AppError::new("crypto_error", "Invalid PIN salt."))?;
+        let stored_hash = hex::decode(&stored_hash_hex)
+            .map_err(|_| AppError::new("crypto_error", "Invalid PIN hash."))?;
+        let computed_hash = crypto::hash_mini_pin(&input.pin, &pin_salt)
+            .map_err(|_| AppError::new("crypto_error", "Failed to hash PIN."))?;
+        computed_hash == stored_hash
+    } else {
+        // Old format: plaintext PIN
+        input.pin == stored_hash_hex
+    };
+
+    if pin_ok {
         *state.mini_vault_unlocked.lock().unwrap() = true;
+        state.rate_limiter.record_success();
         Ok(())
     } else {
+        state.rate_limiter.record_failure();
         Err(AppError::new("mini_auth_failed", "Incorrect PIN. Please try again."))
     }
 }
@@ -2118,6 +2315,7 @@ fn main() {
                 recovery_path: Mutex::new(recovery_path),
                 session: Mutex::new(None),
                 mini_vault_unlocked: Mutex::new(false),
+                rate_limiter: AuthRateLimiter::new(),
             });
 
             setup_tray(app)?;
@@ -2182,6 +2380,7 @@ fn main() {
             update_mini_note,
             export_vault,
             import_vault,
+            get_unused_group_colors,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

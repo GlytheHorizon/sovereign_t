@@ -134,6 +134,16 @@ pub fn aad_for_entry(entry_id: &str, field: &str) -> Vec<u8> {
     format!("entry:{}|field:{}", entry_id, field).into_bytes()
 }
 
+pub fn hash_mini_pin(pin: &str, salt: &[u8]) -> Result<Vec<u8>, CryptoError> {
+    let params = argon2_params()?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut hash = vec![0u8; KEY_LEN];
+    argon2
+        .hash_password_into(pin.as_bytes(), salt, &mut hash)
+        .map_err(|_| CryptoError::KdfFailed)?;
+    Ok(hash)
+}
+
 fn argon2_params() -> Result<Params, CryptoError> {
     let memory_kib = 64 * 1024;
     let iterations = 3;

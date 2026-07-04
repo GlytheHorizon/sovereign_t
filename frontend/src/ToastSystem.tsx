@@ -13,6 +13,8 @@ export interface Toast {
   id: string;
   msg: string;
   type: ToastType;
+  undoAction?: () => void;
+  undoLabel?: string;
 }
 
 interface ToastItemProps {
@@ -65,7 +67,14 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       >
         {ICONS[toast.type]}
       </motion.span>
-      <span className="toast-msg">{toast.msg}</span>
+      <div className="toast-body">
+        <span className="toast-msg">{toast.msg}</span>
+        {toast.undoAction && toast.undoLabel && (
+          <button className="undo-toast-btn" onClick={() => { toast.undoAction!(); onDismiss(toast.id); }}>
+            {toast.undoLabel}
+          </button>
+        )}
+      </div>
       <button className="toast-close" onClick={() => onDismiss(toast.id)}>
         <X size={12} />
       </button>
@@ -94,9 +103,9 @@ export function useToastSystem() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const showToast = useCallback((msg: string, type: ToastType = 'success') => {
+  const showToast = useCallback((msg: string, type: ToastType = 'success', undoAction?: () => void, undoLabel?: string) => {
     const id = String(_nextId++);
-    setToasts((prev) => [...prev.slice(-4), { id, msg, type }]);
+    setToasts((prev) => [...prev.slice(-4), { id, msg, type, undoAction, undoLabel }]);
     const timer = setTimeout(() => dismiss(id), 3500);
     timers.current.set(id, timer);
   }, [dismiss]);

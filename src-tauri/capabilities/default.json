@@ -4,7 +4,12 @@
   "description": "IPC for the labeled main window: core APIs plus fullscreen toggle.",
   "windows": ["main"],
   "permissions": [
-    "core:default",
-    "core:window:allow-set-fullscreen"
+    "core:window:default",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-hide",
+    "core:event:default",
+    "core:app:default"
   ]
 }

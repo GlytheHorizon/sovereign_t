@@ -1,6 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense, memo } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import AuthScreen from './AuthScreen';
+import { ThemeProvider } from './ThemeContext';
 
 const VaultLayout = lazy(() => import('./VaultLayout'));
 
@@ -58,13 +59,15 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <Suspense fallback={<div className="auth-screen"><div className="spinner" /></div>}>
-      {!unlocked ? (
-        <AuthScreen onUnlocked={() => setUnlocked(true)} />
-      ) : (
-        <VaultLayout onLocked={() => setUnlocked(false)} />
-      )}
-    </Suspense>
+    <ThemeProvider>
+      <Suspense fallback={<div className="auth-screen"><div className="spinner" /></div>}>
+        {!unlocked ? (
+          <AuthScreen onUnlocked={() => setUnlocked(true)} />
+        ) : (
+          <VaultLayout onLocked={() => setUnlocked(false)} />
+        )}
+      </Suspense>
+    </ThemeProvider>
   );
 };
 
